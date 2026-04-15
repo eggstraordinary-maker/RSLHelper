@@ -1,0 +1,21 @@
+{
+  "app_title": "Sign Language Assistant",
+  "app_description": "Recognition and learning of Russian sign language",
+  "welcome": "Welcome",
+  "login": "Login",
+  "register": "Register",
+  "logout": "Logout",
+  "or_continue_as_guest": "Or continue as guest",
+  "continue_as_guest": "Continue without registration",
+  "guest_mode": "Guest mode",
+  "guest_mode_warning": "You are in guest mode. Only dictionary is available.",
+  "register_for_full_access": "Register for full access",
+  "requires_authentication": "Requires authentication",
+  "dictionary": "Dictionary",
+  "translator": "Translator",
+  "learning": "Learning",
+  "save": "Save",
+  "cancel": "Cancel",
+  "loading": "Loading...", 
+  "exit_guest_mode": "Exit Guest Mode"
+}

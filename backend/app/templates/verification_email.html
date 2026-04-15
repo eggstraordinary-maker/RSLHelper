@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        .container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; text-align: center; }
+        .content { padding: 30px; background: #f9f9f9; }
+        .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; margin: 20px 0; }
+        .footer { padding: 20px; text-align: center; color: #666; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Жестовый помощник</h1>
+        </div>
+        <div class="content">
+            <h2>Подтверждение email</h2>
+            <p>Спасибо за регистрацию! Для завершения регистрации подтвердите ваш email:</p>
+            <a href="{{ verification_url }}" class="button">Подтвердить Email</a>
+            <p>Или скопируйте ссылку:</p>
+            <p style="word-break: break-all; color: #666;">{{ verification_url }}</p>
+            <p>Ссылка действительна 24 часа.</p>
+        </div>
+        <div class="footer">
+            <p>Если вы не регистрировались, просто проигнорируйте это письмо.</p>
+            <p>© 2024 Жестовый помощник. Все права защищены.</p>
+        </div>
+    </div>
+</body>
+</html>
