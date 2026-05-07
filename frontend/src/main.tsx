@@ -4,7 +4,8 @@ import { BrowserRouter as Router, Routes, Route, useParams, useNavigate } from '
 import App from './App'
 import Register from './pages/Register'
 import EmailVerification from './pages/EmailVerification'
-import PasswordResetPage from './pages/PasswordResetPage' 
+import PasswordResetPage from './pages/PasswordResetPage'
+import Profile from './pages/Profile';
 import { AuthProvider } from './contexts/AuthContext'
 import './i18n/config';
 import './styles/index.css'
@@ -37,6 +38,7 @@ createRoot(document.getElementById('root')!).render(
               })()}
             </div>
           } />
+          <Route path="/profile" element={<Profile />} />
         </Routes>
       </AuthProvider>
     </Router>

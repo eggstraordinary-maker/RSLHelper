@@ -6,6 +6,7 @@ import Learning from './pages/Learning';
 import LoginPage from './pages/LogIn';
 import { useAuth } from './contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
 type Tab = 'dictionary' | 'translator' | 'learning';
@@ -122,9 +123,9 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 hidden sm:inline">
+                <Link to="/profile" className="text-sm text-indigo-600 hover:text-indigo-800">
                   {user?.username}
-                </span>
+                </Link>
                 <button
                   onClick={logout}
                   className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors"

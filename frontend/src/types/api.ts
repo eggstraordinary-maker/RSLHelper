@@ -6,6 +6,8 @@ export interface User {
   username: string;
   is_verified: boolean;
   created_at: string;
+  full_name?: string;
+  avatar_url?: string;
 }
 
 export interface LoginResponse {

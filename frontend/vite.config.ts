@@ -8,5 +8,14 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src')
     }
-  }
+  },
+  server: {
+    watch: {
+      usePolling: true,      // ← включает polling
+      interval: 100,
+    },
+    hmr: {
+      overlay: true,
+    },
+  },
 })

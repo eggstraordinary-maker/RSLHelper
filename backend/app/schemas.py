@@ -110,3 +110,12 @@ class UserUpdate(BaseModel):
             raise ValueError(
                 'Имя пользователя может содержать только буквы латиницы, цифры и подчеркивания')
         return v
+    
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class DeleteAccountRequest(BaseModel):
+    password: str

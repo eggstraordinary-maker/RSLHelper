@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta, datetime
 
 from app.database import get_async_db
+from app.dependencies import get_current_active_user
 from app import crud, auth, email_utils, models
 from app.config import settings
 from app.schemas import (
-    UserCreate, UserResponse, Token,
+    PasswordChange, UserCreate, UserResponse, Token,
     EmailVerificationRequest, PasswordResetRequest,
     PasswordResetConfirm
 )
@@ -172,3 +173,17 @@ async def refresh_token(
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/change-password")
+async def change_password(
+    password_data: PasswordChange,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_async_db)
+):
+    if not auth.verify_password(password_data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Incorrect current password")
+    # Здесь можно добавить валидацию нового пароля (например, через схему UserCreate)
+    current_user.hashed_password = auth.get_password_hash(password_data.new_password)
+    await db.commit()
+    return {"message": "Password changed successfully"}

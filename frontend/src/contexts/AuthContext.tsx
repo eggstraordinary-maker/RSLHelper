@@ -3,6 +3,8 @@ import React, { createContext, useContext, useState, useEffect, useRef } from 'r
 import axios from 'axios';
 import { User, LoginResponse } from '../types/api';
 
+const API_URL = import.meta.env.VITE_API_URL;
+
 interface AuthContextType {
   user: User | null;
   token: string | null;
@@ -13,6 +15,9 @@ interface AuthContextType {
   logout: () => void;
   enterGuestMode: () => void;
   exitGuestMode: () => void;
+  updateProfile: (data: Partial<User>) => Promise<void>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -128,14 +133,83 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    setToken(null);
-    setUser(null);
-    setIsGuest(false);
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('guest_mode');
-    delete axios.defaults.headers.common['Authorization'];
+  // Сбрасываем состояние пользователя и гостя
+  setUser(null);
+  setIsGuest(false);
+  setIsLoading(false);  // ← КЛЮЧЕВОЙ МОМЕНТ: снимаем флаг загрузки
+
+  // Очищаем всё из localStorage
+  localStorage.removeItem('access_token');
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user');
+  localStorage.removeItem('guest_mode');
+  
+  // Если используете axios с перехватчиками, сбросьте токен
+  delete axios.defaults.headers.common['Authorization'];
+};
+
+  const updateProfile = async (data: Partial<User>) => {
+    const response = await axios.put(`${API_URL}/users/me`, data, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    setUser(prev => prev ? { ...prev, ...response.data } : null);
+    localStorage.setItem('user', JSON.stringify({ ...user, ...response.data }));
   };
+
+  const changePassword = async (currentPassword: string, newPassword: string) => {
+    await axios.post(`${API_URL}/auth/change-password`, 
+      { current_password: currentPassword, new_password: newPassword },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  };
+
+  const deleteAccount = async (password: string) => {
+  console.log('deleteAccount получила пароль:', password);
+  console.log('URL:', `${API_URL}/users/me`);
+  console.log('token:', token);
+  try {
+    const response = await axios.delete(`${API_URL}/users/me`, {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { password }
+    });
+    console.log('Успех', response);
+  } catch (error) {
+    console.error('Ошибка в deleteAccount', error);
+    throw error;
+  }
+};
+
+  useEffect(() => {
+  const checkAuth = async () => {
+    const storedToken = localStorage.getItem('access_token');
+    const guestMode = localStorage.getItem('guest_mode') === 'true';
+
+    // Если включен гостевой режим
+    if (guestMode) {
+      setIsGuest(true);
+      setIsLoading(false);
+      return;
+    }
+
+    // Если есть токен, пробуем получить данные пользователя
+    if (storedToken) {
+      try {
+        setToken(storedToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
+        const userResponse = await axios.get<User>(`${API_URL}/users/me`);
+        setUser(userResponse.data);
+      } catch (error) {
+        console.error('Ошибка проверки токена', error);
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        setToken(null);
+      }
+    }
+    setIsLoading(false);
+  };
+
+  checkAuth();
+}, []);
 
   return (
     <AuthContext.Provider
@@ -149,6 +223,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         enterGuestMode,
         exitGuestMode,
+        updateProfile,
+        changePassword,
+        deleteAccount,
       }}
     >
       {children}
