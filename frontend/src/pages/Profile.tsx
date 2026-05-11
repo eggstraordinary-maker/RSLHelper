@@ -9,7 +9,7 @@ interface UserProfile {
 }
 
 const Profile: React.FC = () => {
-  const { user, updateProfile, changePassword, deleteAccount, logout } = useAuth();
+  const { user, updateProfile, changePassword, deleteAccount, logout, getProgressStats, completeLesson } = useAuth();
   const navigate = useNavigate();
   // Состояния для редактирования профиля
   const [editMode, setEditMode] = useState(false);
@@ -42,6 +42,30 @@ const Profile: React.FC = () => {
       });
     }
   }, [user]);
+
+  // Состояния для прогресса
+  const [progress, setProgress] = useState<{
+    total_lessons: number;
+    completed_lessons: number;
+    completed_percentage: number;
+    recent_lessons: string[];
+  } | null>(null);
+
+  // Загрузка прогресса при монтировании
+  useEffect(() => {
+    if (user) {
+      loadProgress();
+    }
+  }, [user]);
+
+  const loadProgress = async () => {
+    try {
+      const stats = await getProgressStats();
+      setProgress(stats);
+    } catch (err) {
+      console.error('Ошибка загрузки прогресса', err);
+    }
+  };
 
   // Обработчики для редактирования профиля
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -129,6 +153,40 @@ const Profile: React.FC = () => {
       </div>
 
       <h1 className="text-2xl font-bold mb-6">Личный кабинет</h1>
+
+       {/* Блок прогресса */}
+      {progress && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Прогресс обучения</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Пройдено уроков:</span>
+              <span className="font-bold text-lg">
+                {progress.completed_lessons} / {progress.total_lessons}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${progress.completed_percentage}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Общий прогресс: {Math.round(progress.completed_percentage)}%
+            </p>
+            {progress.recent_lessons.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm font-medium text-gray-700">Недавно изученные жесты:</p>
+                <ul className="list-disc list-inside text-sm text-gray-600">
+                  {progress.recent_lessons.map((word, idx) => (
+                    <li key={idx}>{word}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Блок профиля */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">

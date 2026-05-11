@@ -18,6 +18,8 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
+  getProgressStats: () => Promise<{ total_lessons: number; completed_lessons: number; completed_percentage: number; recent_lessons: string[] }>;
+  completeLesson: (word: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -136,7 +138,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Сбрасываем состояние пользователя и гостя
   setUser(null);
   setIsGuest(false);
-  setIsLoading(false);  // ← КЛЮЧЕВОЙ МОМЕНТ: снимаем флаг загрузки
+  setIsLoading(false);  
 
   // Очищаем всё из localStorage
   localStorage.removeItem('access_token');
@@ -162,6 +164,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       { headers: { Authorization: `Bearer ${token}` } }
     );
   };
+
+  const getProgressStats = async () => {
+  const response = await axios.get(`${API_URL}/progress/stats`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  return response.data;
+};
+
+const completeLesson = async (word: string) => {
+  await axios.post(`${API_URL}/progress/complete/${encodeURIComponent(word)}`, {}, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+};
 
   const deleteAccount = async (password: string) => {
   console.log('deleteAccount получила пароль:', password);
@@ -226,6 +241,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfile,
         changePassword,
         deleteAccount,
+        getProgressStats,
+        completeLesson
       }}
     >
       {children}

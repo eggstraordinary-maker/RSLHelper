@@ -9,7 +9,7 @@ from app.middleware.language_middleware import LanguageMiddleware
 from app.config import settings
 from app.database import engine
 from app import models
-
+from app.routers import progress
 
 class CustomCORSMiddleware(CORSMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -54,7 +54,7 @@ app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(language.router)
 app.include_router(videos.router)
-
+app.include_router(progress.router)
 
 @app.get("/")
 async def root():

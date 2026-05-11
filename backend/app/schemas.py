@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, validator, Field, field_validator
-from typing import Optional
+from typing import List, Optional
 from datetime import datetime
 import re
 
@@ -119,3 +119,25 @@ class PasswordChange(BaseModel):
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
+class UserProgressBase(BaseModel):
+    word: str
+    completed: bool = False
+    attempts: int = 0
+
+class UserProgressCreate(UserProgressBase):
+    pass
+
+class UserProgress(UserProgressBase):
+    id: int
+    user_id: int
+    completed_at: datetime | None
+
+    class Config:
+        from_attributes = True
+
+class ProgressStats(BaseModel):
+    total_lessons: int
+    completed_lessons: int
+    completed_percentage: float
+    recent_lessons: List[str]

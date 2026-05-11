@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
 from app.database import Base
@@ -73,3 +73,14 @@ class VideoFile(Base):
     object_name = Column(String(255), unique=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserLearningProgress(Base):
+    __tablename__ = "user_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    word = Column(String(100), nullable=False)   
+    completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    attempts = Column(Integer, default=0)
