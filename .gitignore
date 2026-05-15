@@ -40,3 +40,5 @@ Thumbs.db
 *.pid
 docker-compose.override.yml
 backend/pyvenv.cfg
+
+recognition/models/SignFlow-R.onnx

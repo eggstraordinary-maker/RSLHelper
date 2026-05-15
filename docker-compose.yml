@@ -93,6 +93,24 @@ services:
     networks:
       - app-network
 
+  recognition:
+    build: ./recognition          # Путь к папке с Dockerfile сервиса
+    ports:
+      - "8001:8000"               # Пробрасываем порт для локального тестирования (внутренний 8000 на хост 8001)
+    volumes:
+      # Монтируем папку с моделями для удобства разработки (опционально)
+      - ./recognition/models:/app/models:ro
+    restart: unless-stopped
+    # Для использования GPU:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+
 volumes:
   postgres_data:
   minio_data:
