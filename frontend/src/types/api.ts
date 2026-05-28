@@ -8,6 +8,7 @@ export interface User {
   created_at: string;
   full_name?: string;
   avatar_url?: string;
+  role: 'user' | 'admin';
 }
 
 export interface LoginResponse {

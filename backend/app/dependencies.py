@@ -3,7 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db
-from app import crud, auth
+from app import crud, auth, models
 
 security = HTTPBearer()
 
@@ -36,4 +36,15 @@ async def get_current_user(
 async def get_current_active_user(current_user=Depends(get_current_user)):
     if not current_user.is_verified:
         raise HTTPException(status_code=400, detail="Email not verified")
+    return current_user
+
+
+async def get_current_admin_user(
+    current_user: models.User = Depends(get_current_user)
+):
+    if current_user.role != models.UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Недостаточно прав доступа"
+        )
     return current_user

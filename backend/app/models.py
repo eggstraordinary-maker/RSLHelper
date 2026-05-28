@@ -1,8 +1,14 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum
 from sqlalchemy.sql import func
 from datetime import datetime, timedelta
 from app.database import Base
 import uuid
+from enum import Enum
+
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
 
 
 def generate_uuid():
@@ -21,6 +27,9 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(String, default=UserRole.USER.value, nullable=False)
 
     # Дополнительные поля для профиля
     full_name = Column(String(200))

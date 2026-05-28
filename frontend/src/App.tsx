@@ -4,12 +4,13 @@ import Dictionary from './pages/Dictionary';
 import Translator from './pages/Translator';
 import Learning from './pages/Learning';
 import LoginPage from './pages/LogIn';
+import AdminPage from './pages/AdminPage';
 import { useAuth } from './contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
-type Tab = 'dictionary' | 'translator' | 'learning';
+type Tab = 'dictionary' | 'translator' | 'learning' | 'admin';
 
 // Компонент страницы выбора
 const AuthChoicePage: React.FC<{ onShowLogin: () => void }> = ({ onShowLogin }) => {
@@ -86,6 +87,10 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
 
   // Определяем доступные вкладки
   const availableTabs: Tab[] = isGuest ? ['dictionary'] : ['dictionary', 'translator', 'learning'];
+
+  const effectiveTabs = user?.role === 'admin'
+  ? [...availableTabs, 'admin' as Tab]
+  : availableTabs;
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
@@ -167,6 +172,7 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
             {tab === 'dictionary' && t('dictionary')}
             {tab === 'translator' && t('translator')}
             {tab === 'learning' && t('learning')}
+            {tab === 'admin' && 'Администрирование'}
           </h2>
         </div>
 
@@ -174,13 +180,14 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
           {tab === 'dictionary' && <Dictionary />}
           {tab === 'translator' && !isGuest && <Translator />}
           {tab === 'learning' && !isGuest && <Learning />}
+          {tab === 'admin' && <AdminPage />}
         </div>
       </main>
 
       <footer className="fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-30">
         <BottomNav
           active={tab}
-          availableTabs={availableTabs}
+          availableTabs={effectiveTabs}
           onChange={(t) => {
             if (isGuest && t !== 'dictionary') {
               setShowLogin(true);

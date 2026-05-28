@@ -64,6 +64,7 @@ class UserResponse(UserBase):
     is_active: bool
     is_verified: bool
     created_at: datetime
+    role: str
 
     class Config:
         from_attributes = True

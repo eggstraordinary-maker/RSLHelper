@@ -4,12 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
-from app.routers import auth, users, language, videos
+from app.routers import auth, users, language, videos, progress, admin
 from app.middleware.language_middleware import LanguageMiddleware
 from app.config import settings
 from app.database import engine
 from app import models
-from app.routers import progress
 
 class CustomCORSMiddleware(CORSMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -37,17 +36,25 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-app.add_middleware(LanguageMiddleware)
-
-# Настройка CORS
 app.add_middleware(
-    CustomCORSMiddleware,
+    CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8000", "http://frontend:5173"],
-    # allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(LanguageMiddleware)
+
+# Настройка CORS
+# app.add_middleware(
+#     CustomCORSMiddleware,
+#     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8000", "http://frontend:5173"],
+#     # allow_origins=["*"],
+#     allow_credentials=True,
+#     allow_methods=["*"],
+#     allow_headers=["*"],
+# )
 
 # Подключение роутеров
 app.include_router(auth.router)
@@ -55,6 +62,7 @@ app.include_router(users.router)
 app.include_router(language.router)
 app.include_router(videos.router)
 app.include_router(progress.router)
+app.include_router(admin.router)
 
 @app.get("/")
 async def root():
