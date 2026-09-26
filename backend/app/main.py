@@ -1,5 +1,6 @@
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -24,6 +25,23 @@ app = FastAPI(
     description="API для приложения распознавания жестов русского жестового языка",
     version="1.0.0"
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def sanitized_validation_error_handler(
+    _request: Request, exc: RequestValidationError
+):
+    # Pydantic's default error payload includes the rejected input. That can
+    # contain passwords, tokens, or other private form data.
+    safe_errors = [
+        {
+            "loc": error.get("loc"),
+            "msg": error.get("msg"),
+            "type": error.get("type"),
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
 
 app.add_middleware(
     CORSMiddleware,

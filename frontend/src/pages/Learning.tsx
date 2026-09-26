@@ -97,9 +97,8 @@ export default function Learning() {
     setRecognizeResult(`Совпадение: жест распознан как «${selectedDescription}»`);
     try {
       await completeLesson(selectedDescription);
-      console.log(`Прогресс сохранён для слова "${selectedDescription}"`);
-    } catch (err) {
-      console.error('Ошибка сохранения прогресса', err);
+    } catch {
+      // Progress can be retried on the next practice attempt.
     }
   };
 

@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timedelta
+import hashlib
 from pathlib import Path
 
 from alembic import command
@@ -50,6 +52,24 @@ def test_legacy_database_is_adopted_without_losing_rows(tmp_path: Path) -> None:
                     email="existing@example.com",
                     username="existing_user",
                     hashed_password="existing-hash",
+                    verification_token="legacy-user-verification-token",
+                    reset_token="legacy-reset-token",
+                    reset_token_expires=datetime.utcnow() + timedelta(hours=1),
+                )
+            )
+            session.add(
+                models.RefreshToken(
+                    token_hash="legacy-refresh-token",
+                    user_id=1,
+                    expires_at=datetime.utcnow() + timedelta(days=1),
+                    is_revoked=False,
+                )
+            )
+            session.add(
+                models.EmailVerification(
+                    email="existing@example.com",
+                    token_hash="legacy-email-verification-token",
+                    expires_at=datetime.utcnow() + timedelta(hours=1),
                 )
             )
             session.commit()
@@ -59,5 +79,19 @@ def test_legacy_database_is_adopted_without_losing_rows(tmp_path: Path) -> None:
                 email="existing@example.com"
             ).one()
             assert stored_user.username == "existing_user"
+            assert stored_user.reset_token == hashlib.sha256(
+                b"legacy-reset-token"
+            ).hexdigest()
+            assert stored_user.verification_token == hashlib.sha256(
+                b"legacy-user-verification-token"
+            ).hexdigest()
+            stored_refresh = session.query(models.RefreshToken).one()
+            assert stored_refresh.token_hash == hashlib.sha256(
+                b"legacy-refresh-token"
+            ).hexdigest()
+            stored_verification = session.query(models.EmailVerification).one()
+            assert stored_verification.token_hash == hashlib.sha256(
+                b"legacy-email-verification-token"
+            ).hexdigest()
     finally:
         engine.dispose()

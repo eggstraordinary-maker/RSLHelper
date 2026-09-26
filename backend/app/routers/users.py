@@ -37,6 +37,7 @@ async def delete_user_account(
 ):
     if not auth.verify_password(request.password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect password")
+    await crud.revoke_user_refresh_tokens(db, current_user.id)
     await db.delete(current_user)
     await db.commit()
     return Response(status_code=204)

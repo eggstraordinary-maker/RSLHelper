@@ -1,9 +1,13 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Enum as SQLEnum
-from sqlalchemy.sql import func
 from datetime import datetime, timedelta
-from app.database import Base
-import uuid
 from enum import Enum
+from hashlib import sha256
+import secrets
+import uuid
+
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy.sql import func
+
+from app.database import Base
 
 
 class UserRole(str, Enum):
@@ -47,23 +51,29 @@ class EmailVerification(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), nullable=False, index=True)
-    token = Column(String(100), unique=True, index=True, nullable=False)
+    token_hash = Column("token", String(64), unique=True, index=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False)
 
     @classmethod
-    def create_for_email(cls, email: str) -> "EmailVerification":
-        token = generate_uuid()
+    def create_for_email(cls, email: str) -> tuple["EmailVerification", str]:
+        token = secrets.token_urlsafe(32)
         expires_at = datetime.utcnow() + timedelta(hours=24)
-        return cls(email=email, token=token, expires_at=expires_at)
+        verification = cls(
+            email=email,
+            token_hash=sha256(token.encode("utf-8")).hexdigest(),
+            expires_at=expires_at,
+        )
+        return verification, token
 
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    token = Column(String(500), unique=True, index=True, nullable=False)
+    # Preserve the legacy column name but store only a one-way token digest.
+    token_hash = Column("token", String(64), unique=True, index=True, nullable=False)
     user_id = Column(Integer, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -89,7 +99,7 @@ class UserLearningProgress(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    word = Column(String(100), nullable=False)   
+    word = Column(String(100), nullable=False)
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     attempts = Column(Integer, default=0)

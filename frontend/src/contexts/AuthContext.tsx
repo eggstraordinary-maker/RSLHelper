@@ -51,8 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const response = await axios.get<User>('http://localhost:8000/users/me');
           setUser(response.data);
           setToken(storedToken);
-        } catch (error) {
-          console.error('Ошибка загрузки пользователя', error);
+        } catch {
           // Если токен невалиден, очищаем его
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
@@ -118,9 +117,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
       const userResponse = await axios.get<User>('http://localhost:8000/users/me');
       setUser(userResponse.data);
-    } catch (error) {
-      console.error('Ошибка загрузки пользователя после входа', error);
-      throw error;
+    } catch {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setToken(null);
+      setUser(null);
+      delete axios.defaults.headers.common['Authorization'];
+      throw new Error('Не удалось загрузить профиль пользователя');
     }
   };
 
@@ -130,11 +133,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password,
     });
-    // После регистрации автоматически входим
-    await login(email, password);
+    // Require email verification before creating an authenticated session.
   };
 
   const logout = () => {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (refreshToken) {
+      void axios.post(`${API_URL}/auth/logout`, { refresh_token: refreshToken }).catch(() => undefined);
+    }
+
   // Сбрасываем состояние пользователя и гостя
   setUser(null);
   setIsGuest(false);
@@ -204,8 +211,7 @@ const completeLesson = async (word: string) => {
         axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
         const userResponse = await axios.get<User>(`${API_URL}/users/me`);
         setUser(userResponse.data);
-      } catch (error) {
-        console.error('Ошибка проверки токена', error);
+      } catch {
         localStorage.removeItem('access_token');
         localStorage.removeItem('refresh_token');
         setToken(null);

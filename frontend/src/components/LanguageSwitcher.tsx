@@ -27,8 +27,8 @@ const LanguageSwitcher: React.FC = () => {
         credentials: 'include',
         body: JSON.stringify({ lang: lng })
       });
-    } catch (error) {
-      console.error('Error saving language preference:', error);
+    } catch {
+      // Language selection remains available locally if the API is offline.
     }
   };
 

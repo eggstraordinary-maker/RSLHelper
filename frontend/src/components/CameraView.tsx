@@ -21,15 +21,13 @@ const CameraView: React.FC = () => {
             try {
               await videoRef.current?.play();
               setIsActive(true);
-            } catch (playError) {
-              console.warn("Ошибка при воспроизведении видео:", playError);
+            } catch {
               setError("Не удалось начать воспроизведение видео.");
             }
           };
         }
-      } catch (err) {
-        console.error("Ошибка доступа к камере:", err);
-        setError("Не удалось получить доступ к камере: " + (err as Error).message);
+      } catch {
+        setError("Не удалось получить доступ к камере. Проверьте разрешение браузера.");
       }
     }
 

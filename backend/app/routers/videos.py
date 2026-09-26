@@ -1,24 +1,28 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, Request
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-import uuid
 import io
+import logging
+import uuid
 from datetime import timedelta
 
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
 from app.database import get_db
+from app.dependencies import get_current_admin_user
 from app.models import VideoFile
 from app.services.storage import storage
 
 router = APIRouter(prefix="/videos", tags=["videos"])
+logger = logging.getLogger(__name__)
 
 
 @router.post("/upload")
 async def upload_video(
     file: UploadFile = File(...),
     description: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_admin=Depends(get_current_admin_user),
 ):
-
     contents = await file.read()
 
     object_name = f"{uuid.uuid4()}_{file.filename}"
@@ -50,18 +54,25 @@ def list_videos(db: Session = Depends(get_db)):
 
 @router.get("/{object_name}")
 def get_video(object_name: str):
-
-    url = storage.presigned_get_object(
-        object_name,
-        expires=timedelta(hours=2)
-    )
+    try:
+        url = storage.presigned_get_object(
+            object_name,
+            expires=timedelta(hours=2),
+        )
+    except Exception as exc:
+        logger.warning("Video link generation failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=404, detail="Video not found") from None
 
     return {"url": url}
 
 
 @router.get("/stream/{object_name}")
 def stream_video(request: Request, object_name: str):
-    response = storage.get_object(object_name)
+    try:
+        response = storage.get_object(object_name)
+    except Exception as exc:
+        logger.warning("Video retrieval failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=404, detail="Video not found") from None
 
     def stream_chunks():
         try:

@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from fastapi.testclient import TestClient
 
-from app import crud, models
+from app import auth, crud, models
 from app.database import Base
 from app.main import app
 from app.schemas import PasswordChange, PasswordResetConfirm, UserCreate, UserUpdate
@@ -100,10 +100,11 @@ async def test_email_verification_token_is_consumed_once(
         hashed_password="hashed",
     )
     db_session.add(learner)
-    verification = models.EmailVerification.create_for_email(learner.email)
+    verification, raw_token = models.EmailVerification.create_for_email(learner.email)
     db_session.add(verification)
     await db_session.commit()
 
-    assert await crud.verify_email_token(db_session, verification.token) is True
+    assert verification.token_hash == auth.hash_token(raw_token)
+    assert await crud.verify_email_token(db_session, raw_token) is True
     assert learner.is_verified is True
-    assert await crud.verify_email_token(db_session, verification.token) is False
+    assert await crud.verify_email_token(db_session, raw_token) is False

@@ -51,6 +51,15 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     user_id: int | None = None
     public_id: str | None = None
+    token_id: str | None = None
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=1, max_length=4096)
+
+
+class EmailVerificationTokenRequest(BaseModel):
+    token: str = Field(..., min_length=1, max_length=256)
 
 
 class EmailVerificationRequest(BaseModel):

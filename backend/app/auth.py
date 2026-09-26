@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional
+import hashlib
+import secrets
 from jose import JWTError, jwt
 import bcrypt  # Импортируем bcrypt напрямую
 from app.config import settings
@@ -69,7 +71,11 @@ def create_refresh_token(data: dict) -> str:
     """Создает JWT refresh токен"""
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({
+        "exp": expire,
+        "type": "refresh",
+        "jti": to_encode.get("jti") or secrets.token_urlsafe(32),
+    })
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
     return encoded_jwt
 
@@ -96,11 +102,17 @@ def verify_refresh_token(token: str) -> Optional[TokenData]:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
         public_id: str = payload.get("sub")
         token_type: str = payload.get("type")
+        token_id: str = payload.get("jti")
 
         if public_id is None or token_type != "refresh":
             return None
 
         # Возвращаем TokenData с public_id, а не user_id
-        return TokenData(public_id=public_id)
+        return TokenData(public_id=public_id, token_id=token_id)
     except JWTError:
         return None
+
+
+def hash_token(token: str) -> str:
+    """Return a stable one-way digest for storing opaque tokens at rest."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

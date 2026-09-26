@@ -62,8 +62,8 @@ const Profile: React.FC = () => {
     try {
       const stats = await getProgressStats();
       setProgress(stats);
-    } catch (err) {
-      console.error('Ошибка загрузки прогресса', err);
+    } catch {
+      // Keep the profile usable if progress is temporarily unavailable.
     }
   };
 
@@ -110,17 +110,13 @@ const Profile: React.FC = () => {
 
   // Обработчик удаления аккаунта
   const handleDeleteAccount = async () => {
-    alert('handleDeleteAccount вызван!');   
-    console.log('handleDeleteAccount called')
     setDeleteError(null);
     if (!passwordForDelete) {
       setDeleteError('Введите пароль для подтверждения удаления');
       return;
     }
     try {
-      console.log('deleteAccount called')
       await deleteAccount(passwordForDelete);
-      console.log('after deleteAccount called')
       // Успешно удалили на сервере → выходим из системы и уходим на главную
       logout();
       // navigate('/', { replace: true });

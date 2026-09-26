@@ -11,8 +11,16 @@ import './i18n/config';
 import './styles/index.css'
 
 function PasswordResetWrapper() {
-  const { token } = useParams<{ token: string }>();
+  const { token: pathToken } = useParams<{ token: string }>();
   const navigate = useNavigate();
+  const [fragmentToken] = React.useState(() => window.location.hash.slice(1));
+  const token = pathToken ?? fragmentToken;
+
+  React.useEffect(() => {
+    if (fragmentToken) {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, [fragmentToken]);
   
   return <PasswordResetPage 
     token={token} 
@@ -28,6 +36,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/" element={<App />} />
           <Route path="/register" element={<Register />} />
           <Route path="/verify-email/:token" element={<EmailVerification />} />
+          <Route path="/verify-email" element={<EmailVerification />} />
+          <Route path="/reset-password" element={<PasswordResetWrapper />} />
           <Route path="/reset-password/:token" element={<PasswordResetWrapper />} />
           <Route path="/exit-guest" element={
             <div style={{ display: 'none' }}>

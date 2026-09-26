@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
 interface PasswordResetPageProps {
@@ -6,115 +7,103 @@ interface PasswordResetPageProps {
   onBack: () => void;
 }
 
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+
 const PasswordResetPage: React.FC<PasswordResetPageProps> = ({ token, onBack }) => {
-  const [email, setEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  // Если есть токен - показываем форму сброса пароля
-  // Если нет токена - показываем форму запроса сброса
-  const hasToken = Boolean(token);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setMessage("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (hasToken) {
-      // Сброс пароля с токеном
-      if (newPassword !== confirmPassword) {
-        setMessage("Пароли не совпадают");
-        setIsError(true);
-        return;
-      }
-      
-      try {
-        // Здесь будет запрос к API
-        console.log("Resetting password with token:", token, "new password:", newPassword);
-        setMessage("Пароль успешно изменен! Теперь вы можете войти.");
-        setIsError(false);
-        setTimeout(() => navigate('/'), 3000);
-      } catch (error) {
-        setMessage("Ошибка при сбросе пароля");
-        setIsError(true);
-      }
-    } else {
-      // Запрос на сброс пароля
-      try {
-        console.log("Requesting password reset for:", email);
-        setMessage("Если email существует, на него будет отправлена ссылка для сброса пароля.");
-        setIsError(false);
-      } catch (error) {
-        setMessage("Ошибка при отправке запроса");
-        setIsError(true);
-      }
+    if (!token) {
+      setMessage("Ссылка для сброса пароля недействительна.");
+      setIsError(true);
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setMessage("Пароли не совпадают.");
+      setIsError(true);
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await axios.post(`${API_URL}/auth/reset-password`, {
+        token,
+        new_password: newPassword,
+      });
+      setMessage("Пароль изменён. Теперь можно войти с новым паролем.");
+      setIsError(false);
+      window.setTimeout(() => navigate("/"), 2000);
+    } catch {
+      setMessage("Не удалось изменить пароль. Запросите новую ссылку и попробуйте ещё раз.");
+      setIsError(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8">
-        <h2 className="text-2xl font-semibold mb-6 text-center">
-          {hasToken ? "Сброс пароля" : "Восстановление пароля"}
-        </h2>
+        <h2 className="text-2xl font-semibold mb-6 text-center">Сброс пароля</h2>
 
         {message && (
-          <div className={`mb-4 p-3 rounded ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div
+            role="status"
+            className={`mb-4 p-3 rounded ${isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
+          >
             {message}
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {!hasToken ? (
-            // Форма запроса сброса пароля
-            <div>
-              <label className="block mb-1 text-sm font-medium">Email</label>
-              <input
-                type="email"
-                className="w-full p-2 border border-gray-300 rounded-md"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Введите ваш email"
-                required
-              />
-            </div>
-          ) : (
-            // Форма сброса пароля с токеном
-            <>
-              <div>
-                <label className="block mb-1 text-sm font-medium">Новый пароль</label>
-                <input
-                  type="password"
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  placeholder="Введите новый пароль"
-                  required
-                  minLength={8}
-                />
-              </div>
-              <div>
-                <label className="block mb-1 text-sm font-medium">Подтвердите пароль</label>
-                <input
-                  type="password"
-                  className="w-full p-2 border border-gray-300 rounded-md"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Повторите новый пароль"
-                  required
-                />
-              </div>
-            </>
-          )}
+          <div>
+            <label htmlFor="new-password" className="block mb-1 text-sm font-medium">
+              Новый пароль
+            </label>
+            <input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              className="w-full p-2 border border-gray-300 rounded-md"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              required
+              minLength={8}
+              maxLength={128}
+            />
+          </div>
+          <div>
+            <label htmlFor="confirm-password" className="block mb-1 text-sm font-medium">
+              Повторите новый пароль
+            </label>
+            <input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              className="w-full p-2 border border-gray-300 rounded-md"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              required
+              minLength={8}
+              maxLength={128}
+            />
+          </div>
 
           <button
             type="submit"
-            className="w-full py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition font-medium"
+            disabled={isSubmitting}
+            className="w-full py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition font-medium disabled:opacity-60"
           >
-            {hasToken ? "Сменить пароль" : "Отправить ссылку"}
+            {isSubmitting ? "Сохранение…" : "Изменить пароль"}
           </button>
-
           <button
             type="button"
             onClick={onBack}

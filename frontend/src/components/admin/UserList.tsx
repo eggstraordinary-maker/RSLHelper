@@ -12,8 +12,8 @@ const UserList: React.FC = () => {
     try {
       const data = await fetchAllUsers();
       setUsers(data);
-    } catch (error) {
-      console.error('Ошибка загрузки пользователей', error);
+    } catch {
+      // The current page keeps its empty state; never log the Axios request config.
     } finally {
       setLoading(false);
     }
