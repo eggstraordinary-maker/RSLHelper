@@ -2,13 +2,9 @@ import uvicorn
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 
 from app.routers import auth, users, language, videos, progress, admin
 from app.middleware.language_middleware import LanguageMiddleware
-from app.config import settings
-from app.database import engine
-from app import models
 
 class CustomCORSMiddleware(CORSMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -23,17 +19,10 @@ class CustomCORSMiddleware(CORSMiddleware):
         return response
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Создание таблиц при старте
-    models.Base.metadata.create_all(bind=engine)
-    yield
-
 app = FastAPI(
     title="РЖЯ-помощник API",
     description="API для приложения распознавания жестов русского жестового языка",
-    version="1.0.0",
-    lifespan=lifespan
+    version="1.0.0"
 )
 
 app.add_middleware(

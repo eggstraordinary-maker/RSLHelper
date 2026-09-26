@@ -25,3 +25,10 @@ export interface RegisterResponse {
 export interface ApiError {
   detail: string;
 }
+
+export interface ProgressStats {
+  total_lessons: number;
+  completed_lessons: number;
+  completed_percentage: number;
+  recent_lessons: string[];
+}

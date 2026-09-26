@@ -1,10 +1,12 @@
 import uuid
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import timedelta, datetime
+from starlette.concurrency import run_in_threadpool
 
 from app.database import get_async_db
 from app.dependencies import get_current_active_user
@@ -17,6 +19,18 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
+logger = logging.getLogger(__name__)
+
+
+async def _send_email_safely(sender, *args) -> bool:
+    try:
+        delivered = await run_in_threadpool(sender, *args)
+    except Exception as exc:
+        logger.warning("Email delivery failed (%s)", type(exc).__name__)
+        return False
+    if not delivered:
+        logger.warning("Email delivery failed")
+    return bool(delivered)
 
 
 @router.post("/register", response_model=UserResponse)
@@ -33,7 +47,13 @@ async def register(
 
         # Отправляем email для подтверждения
         verification_url = f"{settings.frontend_url}/verify-email/{verification.token}"
-        email_utils.send_verification_email(user.email, verification_url)
+        if not await _send_email_safely(
+            email_utils.send_verification_email, user.email, verification_url
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Email delivery is temporarily unavailable; retry verification later",
+            )
 
         return user
     except ValueError as e:
@@ -103,7 +123,13 @@ async def resend_verification(
 
     # Отправляем email
     verification_url = f"{settings.frontend_url}/verify-email/{verification.token}"
-    email_utils.send_verification_email(user.email, verification_url)
+    if not await _send_email_safely(
+        email_utils.send_verification_email, user.email, verification_url
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email delivery is temporarily unavailable; retry later",
+        )
 
     return {"message": "Verification email sent"}
 
@@ -126,7 +152,9 @@ async def forgot_password(
 
         # Отправляем email
         reset_url = f"{settings.frontend_url}/reset-password/{reset_token}"
-        email_utils.send_password_reset_email(user.email, reset_url)
+        await _send_email_safely(
+            email_utils.send_password_reset_email, user.email, reset_url
+        )
 
     return {"message": "If email exists, reset instructions sent"}
 

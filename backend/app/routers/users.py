@@ -1,6 +1,4 @@
-from http.client import HTTPException
-
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db

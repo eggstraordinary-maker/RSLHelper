@@ -1,56 +1,29 @@
-from pydantic import BaseModel, EmailStr, validator, Field, field_validator
-from typing import List, Optional
 from datetime import datetime
-import re
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.password_policy import is_valid_username, validate_password_strength
 
 
 class UserBase(BaseModel):
     email: EmailStr
     username: str = Field(..., min_length=3, max_length=50)
 
-    @field_validator('username')
-    def validate_username(cls, v):
-        if not re.match(r'^[a-zA-Z0-9_]+$', v):
-            raise ValueError(
-                'Имя пользователя может содержать только буквы латиницы, цифры и подчеркивания')
-        return v
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        if not is_valid_username(value):
+            raise ValueError("Username may contain only letters, digits and underscores")
+        return value
 
 
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=128)
 
-    @field_validator('password')
-    def validate_password(cls, v):
-        # Проверка минимальной длины в символах
-        if len(v) < 8:
-            raise ValueError('Пароль должен содержать минимум 8 символов')
-
-        # Проверка на кириллицу (опционально, можно убрать)
-        if re.search(r'[а-яА-ЯёЁ]', v):
-            raise ValueError('Пароль не должен содержать кириллицу')
-
-        # Проверяем наличие хотя бы одной заглавной буквы
-        if not any(c.isupper() for c in v):
-            raise ValueError('Пароль должен содержать хотя бы одну заглавную букву')
-
-        # Проверяем наличие хотя бы одной строчной буквы
-        if not any(c.islower() for c in v):
-            raise ValueError('Пароль должен содержать хотя бы одну строчную букву')
-
-        # Проверяем наличие хотя бы одной цифры
-        if not any(c.isdigit() for c in v):
-            raise ValueError('Пароль должен содержать хотя бы одну цифру')
-
-        # ВАЖНО: bcrypt сам обрабатывает ограничение в 72 байта
-        # Предупреждаем пользователя, если пароль может быть обрезан
-        byte_length = len(v.encode('utf-8'))
-        if byte_length > 72:
-            raise ValueError(
-                f'Пароль слишком длинный ({byte_length} байт). '
-                'Будет обрезан до 72 байт. Рекомендуем сократить пароль.'
-            )
-
-        return v
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class UserLogin(BaseModel):
@@ -59,16 +32,15 @@ class UserLogin(BaseModel):
 
 
 class UserResponse(UserBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     public_id: str
     is_active: bool
     is_verified: bool
     created_at: datetime
     role: str
-
-    class Config:
-        from_attributes = True
-
+    full_name: str | None = None
 
 class Token(BaseModel):
     access_token: str
@@ -77,8 +49,8 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    user_id: Optional[int] = None
-    public_id: Optional[str] = None
+    user_id: int | None = None
+    public_id: str | None = None
 
 
 class EmailVerificationRequest(BaseModel):
@@ -91,54 +63,61 @@ class PasswordResetRequest(BaseModel):
 
 class PasswordResetConfirm(BaseModel):
     token: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8, max_length=128)
 
-    @field_validator('new_password')
-    def validate_password(cls, v):
-        if len(v) < 8:
-            raise ValueError('Пароль должен содержать минимум 8 символов')
-        return v
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class UserUpdate(BaseModel):
-    """Схема для обновления профиля пользователя"""
-    username: Optional[str] = Field(None, min_length=3, max_length=50)
-    full_name: Optional[str] = Field(None, max_length=200)
+    username: str | None = Field(None, min_length=3, max_length=50)
+    full_name: str | None = Field(None, max_length=200)
 
-    @field_validator('username')
-    def validate_username(cls, v):
-        if v is not None and not re.match(r'^[a-zA-Z0-9_]+$', v):
-            raise ValueError(
-                'Имя пользователя может содержать только буквы латиницы, цифры и подчеркивания')
-        return v
-    
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str | None) -> str | None:
+        if value is None:
+            raise ValueError("Username cannot be empty")
+        if not is_valid_username(value):
+            raise ValueError("Username may contain only letters, digits and underscores")
+        return value
+
 
 class PasswordChange(BaseModel):
     current_password: str
-    new_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        return validate_password_strength(value)
 
 
 class DeleteAccountRequest(BaseModel):
     password: str
+
 
 class UserProgressBase(BaseModel):
     word: str
     completed: bool = False
     attempts: int = 0
 
+
 class UserProgressCreate(UserProgressBase):
     pass
 
+
 class UserProgress(UserProgressBase):
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     user_id: int
     completed_at: datetime | None
-
-    class Config:
-        from_attributes = True
 
 class ProgressStats(BaseModel):
     total_lessons: int
     completed_lessons: int
     completed_percentage: float
-    recent_lessons: List[str]
+    recent_lessons: list[str]

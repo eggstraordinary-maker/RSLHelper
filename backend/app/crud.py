@@ -109,70 +109,32 @@ async def create_email_verification(db: AsyncSession, email: str) -> EmailVerifi
 
 
 async def verify_email_token(db: AsyncSession, token: str) -> bool:
-    """Проверяет токен подтверждения email с логированием"""
-    import logging
-    logger = logging.getLogger(__name__)
-
-    logger.info(f"Проверка токена: {token}")
-
-    # ИСПРАВЛЕННЫЙ запрос - используем and_ для правильной логики
-    from sqlalchemy import and_
-
+    """Consume a valid email token once, without exposing it in logs."""
     result = await db.execute(
-        select(EmailVerification).where(
-            and_(
-                EmailVerification.token == token,
-                EmailVerification.expires_at > datetime.utcnow(),
-                EmailVerification.is_used.is_(False)
-            )
+        select(EmailVerification)
+        .where(
+            EmailVerification.token == token,
+            EmailVerification.expires_at > datetime.utcnow(),
+            EmailVerification.is_used.is_(False),
         )
+        .with_for_update()
     )
-
     verification = result.scalar_one_or_none()
-
-    if not verification:
-        logger.error(f"Токен не найден, просрочен или уже использован: {token}")
-
-        # Дополнительная диагностика: что именно не так?
-        # Проверяем отдельно каждый критерий
-        result1 = await db.execute(
-            select(EmailVerification).where(EmailVerification.token == token)
-        )
-        v1 = result1.scalar_one_or_none()
-
-        if not v1:
-            logger.error("Токен вообще не существует в базе")
-        else:
-            if v1.expires_at <= datetime.utcnow():
-                logger.error(
-                    f"Токен просрочен. expires_at: {v1.expires_at}, текущее время: {datetime.utcnow()}")
-            if v1.is_used:
-                logger.error("Токен уже использован")
-
+    if verification is None:
         return False
 
-    logger.info(f"Токен найден для email: {verification.email}")
-
-    # Помечаем как использованный
-    verification.is_used = True
-
-    # Находим пользователя и активируем его
     result = await db.execute(
         select(models.User).where(models.User.email == verification.email)
     )
     user = result.scalar_one_or_none()
-
-    if not user:
-        logger.error(f"Пользователь с email {verification.email} не найден")
+    verification.is_used = True
+    if user is None:
+        await db.commit()
         return False
 
-    logger.info(f"Пользователь найден: {user.id}, {user.email}")
     user.is_verified = True
     await db.commit()
-
-    logger.info(f"Email успешно подтвержден для {user.email}")
     return True
-
 async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[models.User]:
     """Находит пользователя по его ID."""
     result = await db.execute(
@@ -186,6 +148,26 @@ async def get_users(db: AsyncSession, skip: int = 0, limit: int = 100):
         select(models.User).offset(skip).limit(limit)
     )
     return result.scalars().all()
+
+
+async def update_user(
+    db: AsyncSession, user: models.User, update_data: schemas.UserUpdate
+) -> models.User:
+    """Update the editable profile fields after checking username uniqueness."""
+    changes = update_data.model_dump(exclude_unset=True)
+    username = changes.get("username")
+    if username and username != user.username:
+        existing_user = await get_user_by_username(db, username)
+        if existing_user and existing_user.id != user.id:
+            raise ValueError("Username is already in use")
+
+    for field, value in changes.items():
+        setattr(user, field, value)
+
+    await db.commit()
+    await db.refresh(user)
+    return user
+
 
 async def delete_user(db: AsyncSession, user: models.User):
     """Удаляет пользователя из базы данных."""

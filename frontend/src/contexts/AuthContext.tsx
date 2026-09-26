@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { User, LoginResponse } from '../types/api';
+import { User, LoginResponse, ProgressStats } from '../types/api';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
@@ -18,7 +18,7 @@ interface AuthContextType {
   updateProfile: (data: Partial<User>) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
-  getProgressStats: () => Promise<{ total_lessons: number; completed_lessons: number; completed_percentage: number; recent_lessons: string[] }>;
+  getProgressStats: () => Promise<ProgressStats>;
   completeLesson: (word: string) => Promise<void>;
 }
 
@@ -151,7 +151,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
   const updateProfile = async (data: Partial<User>) => {
-    const response = await axios.put(`${API_URL}/users/me`, data, {
+    const response = await axios.put<User>(`${API_URL}/users/me`, data, {
       headers: { Authorization: `Bearer ${token}` }
     });
     setUser(prev => prev ? { ...prev, ...response.data } : null);
@@ -166,7 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getProgressStats = async () => {
-  const response = await axios.get(`${API_URL}/progress/stats`, {
+  const response = await axios.get<ProgressStats>(`${API_URL}/progress/stats`, {
     headers: { Authorization: `Bearer ${token}` }
   });
   return response.data;
@@ -179,21 +179,12 @@ const completeLesson = async (word: string) => {
 };
 
   const deleteAccount = async (password: string) => {
-  console.log('deleteAccount получила пароль:', password);
-  console.log('URL:', `${API_URL}/users/me`);
-  console.log('token:', token);
-  try {
-    const response = await axios.delete(`${API_URL}/users/me`, {
-      headers: { Authorization: `Bearer ${token}` },
-      data: { password }
+    await axios.delete(API_URL + "/users/me", {
+      headers: { Authorization: "Bearer " + token },
+      data: { password },
     });
-    console.log('Успех', response);
-  } catch (error) {
-    console.error('Ошибка в deleteAccount', error);
-    throw error;
-  }
-};
-
+    logout();
+  };
   useEffect(() => {
   const checkAuth = async () => {
     const storedToken = localStorage.getItem('access_token');

@@ -26,9 +26,8 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             plain_password.encode('utf-8'),
             hashed_password.encode('utf-8')
         )
-    except (ValueError, TypeError) as e:
+    except (ValueError, TypeError):
         # Логируем ошибку, но возвращаем False для безопасности
-        print(f"Ошибка проверки пароля: {e}")
         return False
 
 

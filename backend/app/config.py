@@ -1,8 +1,8 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # Database
     database_url: str
     database_url_async: str
@@ -32,9 +32,5 @@ class Settings(BaseSettings):
     minio_secret_key: str
     minio_bucket: str = "videos"
     minio_secure: bool = False
-
-    class Config:
-        env_file = ".env"
-
 
 settings = Settings()

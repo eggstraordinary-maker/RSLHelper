@@ -31,7 +31,7 @@ async def get_progress_stats(
     completed_result = await db.execute(
         select(UserLearningProgress).where(
             UserLearningProgress.user_id == current_user.id,
-            UserLearningProgress.completed == True
+            UserLearningProgress.completed.is_(True)
         )
     )
     completed = completed_result.scalars().all()
