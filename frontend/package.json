@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -21,10 +23,12 @@
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^4.0.0",
     "autoprefixer": "^10.4.14",
+    "axios-mock-adapter": "^2.1.0",
     "baseline-browser-mapping": "^2.9.11",
     "postcss": "^8.4.23",
     "tailwindcss": "^3.4.5",
     "typescript": "^5.1.6",
-    "vite": "^7.1.12"
+    "vite": "^7.1.12",
+    "vitest": "^5.0.2"
   }
 }

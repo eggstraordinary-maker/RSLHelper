@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { languageApi } from '../services/api';
 
 const LanguageSwitcher: React.FC = () => {
   const { i18n } = useTranslation();
@@ -21,12 +22,7 @@ const LanguageSwitcher: React.FC = () => {
     
     // Отправляем на сервер для сохранения в cookie
     try {
-      await fetch('http://localhost:8000/api/set-language', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ lang: lng })
-      });
+      await languageApi.set(lng);
     } catch {
       // Language selection remains available locally if the API is offline.
     }

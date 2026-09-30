@@ -1,11 +1,10 @@
 import React, { useState } from "react";
-import axios from "axios";
+import { authApi } from "../services/api";
+import { getApiErrorMessage } from "../services/apiClient";
 
 interface Props {
   onBack: () => void;
 }
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 const PasswordReset: React.FC<Props> = ({ onBack }) => {
   const [email, setEmail] = useState("");
@@ -18,11 +17,11 @@ const PasswordReset: React.FC<Props> = ({ onBack }) => {
     setMessage("");
     setIsSubmitting(true);
     try {
-      const response = await axios.post(`${API_URL}/auth/forgot-password`, { email });
-      setMessage(response.data.message);
+      const response = await authApi.requestPasswordReset(email);
+      setMessage(response.message);
       setIsError(false);
-    } catch {
-      setMessage("Не удалось отправить запрос. Попробуйте позже.");
+    } catch (error) {
+      setMessage(getApiErrorMessage(error, "Не удалось отправить запрос. Попробуйте позже."));
       setIsError(true);
     } finally {
       setIsSubmitting(false);
