@@ -20,9 +20,10 @@ jobs:
       SMTP_USER: ci
       SMTP_PASSWORD: ci
       EMAIL_FROM: ci@example.com
-      MINIO_ENDPOINT: localhost:9000
-      MINIO_ACCESS_KEY: ci
-      MINIO_SECRET_KEY: ci
+      S3_ENDPOINT_URL: http://localhost:8333
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:8333
+      AWS_ACCESS_KEY_ID: ci
+      AWS_SECRET_ACCESS_KEY: ci
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
