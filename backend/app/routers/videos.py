@@ -76,10 +76,10 @@ def stream_video(request: Request, object_name: str):
 
     def stream_chunks():
         try:
-            yield from response.stream(32 * 1024)
+            while chunk := response.read(32 * 1024):
+                yield chunk
         finally:
             response.close()
-            response.release_conn()
 
     return StreamingResponse(
         stream_chunks(),

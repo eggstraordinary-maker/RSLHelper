@@ -26,11 +26,12 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
 
-    # MinIO
-    minio_endpoint: str
-    minio_access_key: str
-    minio_secret_key: str
-    minio_bucket: str = "videos"
-    minio_secure: bool = False
+    # S3-compatible object storage (SeaweedFS in Docker Compose)
+    s3_endpoint_url: str
+    s3_public_endpoint_url: str | None = None
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    s3_bucket: str = "videos"
+    s3_region: str = "us-east-1"
 
 settings = Settings()

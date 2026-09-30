@@ -1,5 +1,7 @@
 # Backend / Python
 __pycache__/
+.pytest_cache/
+*.db
 *.py[cod]
 *.pyo
 *.pyd
@@ -40,3 +42,4 @@ Thumbs.db
 *.pid
 docker-compose.override.yml
 backend/pyvenv.cfg
+.npm-cache/
