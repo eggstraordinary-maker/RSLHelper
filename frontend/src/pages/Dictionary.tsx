@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import LeftTOC from '../components/LeftTOC';
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-interface VideoInfo {
-  id: number;
-  filename: string;
-  description: string;
-  object_name: string;
-}
+import { videosApi } from '../services/api';
+import type { VideoInfo } from '../types/api';
 
 export default function Dictionary() {
   const [videos, setVideos] = useState<VideoInfo[]>([]);
@@ -27,11 +20,7 @@ export default function Dictionary() {
       setLoadingList(true);
       setListError(null);
       try {
-        const response = await fetch(`${API_URL}/videos/`);
-        if (!response.ok) {
-          throw new Error('Ошибка загрузки списка видео');
-        }
-        const data = await response.json();
+        const data = await videosApi.list();
         setVideos(data);
         
         if (data.length > 0) {
@@ -50,8 +39,9 @@ export default function Dictionary() {
   useEffect(() => {
   if (!selectedObjectName) return;
 
-  const url = `${API_URL}/videos/stream/${encodeURIComponent(selectedObjectName)}`;
-  setVideoUrl(url);
+  setLoadingVideo(true);
+  setVideoError(null);
+  setVideoUrl(videosApi.streamUrl(selectedObjectName));
   }, [selectedObjectName]);
 
   const handleSelect = (selectedDisplay: string) => {
@@ -96,6 +86,11 @@ export default function Dictionary() {
             controls
             className="w-full rounded-lg shadow-md"
             autoPlay={false}
+            onLoadedData={() => setLoadingVideo(false)}
+            onError={() => {
+              setLoadingVideo(false);
+              setVideoError('Не удалось загрузить видео');
+            }}
           />
         )}
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import PasswordReset from "./PasswordReset";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from 'react-i18next';
+import { getApiErrorMessage } from '../services/apiClient';
 
 interface LoginProps {
   onClose: () => void;
@@ -25,8 +26,8 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
     try {
       await login(username, password);
       onLoginSuccess(); // Просто закрываем модальное окно
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Ошибка входа");
+    } catch (error) {
+      setError(getApiErrorMessage(error, "Ошибка входа"));
     }
   };
 

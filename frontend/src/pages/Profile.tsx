@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { getApiErrorMessage } from '../services/apiClient';
 
 interface UserProfile {
   id?: number;
@@ -9,8 +9,7 @@ interface UserProfile {
 }
 
 const Profile: React.FC = () => {
-  const { user, updateProfile, changePassword, deleteAccount, logout, getProgressStats, completeLesson } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateProfile, changePassword, deleteAccount, logout, getProgressStats } = useAuth();
   // Состояния для редактирования профиля
   const [editMode, setEditMode] = useState(false);
   const [profileForm, setProfileForm] = useState<UserProfile>({
@@ -77,11 +76,14 @@ const Profile: React.FC = () => {
     e.preventDefault();
     setProfileMessage(null);
     try {
-      await updateProfile(profileForm);
+      await updateProfile({ username: profileForm.username });
       setProfileMessage({ type: 'success', text: 'Профиль успешно обновлён' });
       setEditMode(false);
-    } catch (err: any) {
-      setProfileMessage({ type: 'error', text: err.response?.data?.detail || 'Ошибка обновления профиля' });
+    } catch (error) {
+      setProfileMessage({
+        type: 'error',
+        text: getApiErrorMessage(error, 'Ошибка обновления профиля'),
+      });
     }
   };
 
@@ -103,8 +105,11 @@ const Profile: React.FC = () => {
       setPasswordMessage({ type: 'success', text: 'Пароль успешно изменён' });
       setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
       setShowPasswordForm(false);
-    } catch (err: any) {
-      setPasswordMessage({ type: 'error', text: err.response?.data?.detail || 'Ошибка смены пароля' });
+    } catch (error) {
+      setPasswordMessage({
+        type: 'error',
+        text: getApiErrorMessage(error, 'Ошибка смены пароля'),
+      });
     }
   };
 
@@ -121,8 +126,8 @@ const Profile: React.FC = () => {
       logout();
       // navigate('/', { replace: true });
       window.location.href = '/';
-    } catch (err: any) {
-      setDeleteError(err.response?.data?.detail || 'Ошибка удаления аккаунта. Проверьте пароль.');
+    } catch (error) {
+      setDeleteError(getApiErrorMessage(error, 'Ошибка удаления аккаунта. Проверьте пароль.'));
     }
   };
 
@@ -223,9 +228,8 @@ const Profile: React.FC = () => {
                 type="email"
                 name="email"
                 value={profileForm.email}
-                onChange={handleProfileChange}
-                className="w-full p-2 border rounded-md"
-                required
+                readOnly
+                className="w-full p-2 border rounded-md bg-gray-100 cursor-not-allowed"
               />
             </div>
             <div className="flex gap-2">

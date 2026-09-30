@@ -1,13 +1,12 @@
 import React, { useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { authApi } from "../services/api";
+import { getApiErrorMessage } from "../services/apiClient";
 
 interface PasswordResetPageProps {
   token?: string;
   onBack: () => void;
 }
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
 
 const PasswordResetPage: React.FC<PasswordResetPageProps> = ({ token, onBack }) => {
   const [newPassword, setNewPassword] = useState("");
@@ -34,15 +33,15 @@ const PasswordResetPage: React.FC<PasswordResetPageProps> = ({ token, onBack }) 
 
     setIsSubmitting(true);
     try {
-      await axios.post(`${API_URL}/auth/reset-password`, {
-        token,
-        new_password: newPassword,
-      });
+      await authApi.resetPassword(token, newPassword);
       setMessage("Пароль изменён. Теперь можно войти с новым паролем.");
       setIsError(false);
       window.setTimeout(() => navigate("/"), 2000);
-    } catch {
-      setMessage("Не удалось изменить пароль. Запросите новую ссылку и попробуйте ещё раз.");
+    } catch (error) {
+      setMessage(getApiErrorMessage(
+        error,
+        "Не удалось изменить пароль. Запросите новую ссылку и попробуйте ещё раз.",
+      ));
       setIsError(true);
     } finally {
       setIsSubmitting(false);

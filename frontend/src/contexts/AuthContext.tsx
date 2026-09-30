@@ -1,9 +1,21 @@
-// src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import axios from 'axios';
-import { User, LoginResponse, ProgressStats } from '../types/api';
-
-const API_URL = import.meta.env.VITE_API_URL;
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import type { ProgressStats, User, UserUpdateRequest } from '../types/api';
+import { authApi, progressApi, usersApi } from '../services/api';
+import {
+  AUTH_SESSION_EXPIRED_EVENT,
+  AUTH_TOKENS_CHANGED_EVENT,
+  clearSessionTokens,
+  getAccessToken,
+  getRefreshToken,
+  setSessionTokens,
+} from '../services/apiClient';
 
 interface AuthContextType {
   user: User | null;
@@ -15,7 +27,7 @@ interface AuthContextType {
   logout: () => void;
   enterGuestMode: () => void;
   exitGuestMode: () => void;
-  updateProfile: (data: Partial<User>) => Promise<void>;
+  updateProfile: (data: UserUpdateRequest) => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   getProgressStats: () => Promise<ProgressStats>;
@@ -26,66 +38,83 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('access_token'));
-  const [isGuest, setIsGuest] = useState(() => {
-    // Инициализируем из localStorage при первом рендере
-    return localStorage.getItem('guest_mode') === 'true';
-  });
+  const [token, setToken] = useState<string | null>(() => getAccessToken());
+  const [isGuest, setIsGuest] = useState(
+    () => localStorage.getItem('guest_mode') === 'true',
+  );
   const [isLoading, setIsLoading] = useState(true);
-  const isInitialMount = useRef(true);
+  const initializationStarted = useRef(false);
 
-  // Проверяем состояние при загрузке
-    useEffect(() => {
-    const loadUser = async () => {
+  const clearLocalSession = useCallback(() => {
+    clearSessionTokens();
+    localStorage.removeItem('user');
+    setToken(null);
+    setUser(null);
+  }, []);
+
+  useEffect(() => {
+    const handleTokensChanged = () => setToken(getAccessToken());
+    const handleSessionExpired = () => {
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener(AUTH_TOKENS_CHANGED_EVENT, handleTokensChanged);
+    window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    return () => {
+      window.removeEventListener(AUTH_TOKENS_CHANGED_EVENT, handleTokensChanged);
+      window.removeEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (initializationStarted.current) return;
+    initializationStarted.current = true;
+
+    const loadCurrentUser = async () => {
       if (isGuest) {
-        // Если гость, не делаем запросов к API
         setIsLoading(false);
         return;
       }
-      
-      const storedToken = localStorage.getItem('access_token');
-      if (storedToken) {
-        try {
-          // Устанавливаем заголовок для запроса
-          axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-          const response = await axios.get<User>('http://localhost:8000/users/me');
-          setUser(response.data);
-          setToken(storedToken);
-        } catch {
-          // Если токен невалиден, очищаем его
-          localStorage.removeItem('access_token');
-          localStorage.removeItem('refresh_token');
-          delete axios.defaults.headers.common['Authorization'];
-        }
+
+      if (!getAccessToken()) {
+        setIsLoading(false);
+        return;
       }
-      setIsLoading(false);
+
+      try {
+        setUser(await usersApi.current());
+        setToken(getAccessToken());
+      } catch {
+        clearLocalSession();
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      loadUser();
-    }
-  }, []);
+    void loadCurrentUser();
+  }, [clearLocalSession, isGuest]);
 
-  // Настройка axios заголовков
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      localStorage.setItem('access_token', token);
-    } else {
-      delete axios.defaults.headers.common['Authorization'];
-      localStorage.removeItem('access_token');
+  const logout = useCallback(() => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      void authApi.logout(refreshToken).catch(() => undefined);
     }
-  }, [token]);
+
+    clearLocalSession();
+    setIsGuest(false);
+    setIsLoading(false);
+    localStorage.removeItem('guest_mode');
+  }, [clearLocalSession]);
 
   const enterGuestMode = () => {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
+      void authApi.logout(refreshToken).catch(() => undefined);
+    }
+    clearLocalSession();
     setIsGuest(true);
     localStorage.setItem('guest_mode', 'true');
-    // Удаляем токены если есть
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('refresh_token');
   };
 
   const exitGuestMode = () => {
@@ -94,134 +123,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (email: string, password: string) => {
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', password);
-
-    const response = await axios.post<LoginResponse>(
-      'http://localhost:8000/auth/login',
-      formData,
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
-    );
-
-    const { access_token, refresh_token } = response.data;
-    setToken(access_token);
-    localStorage.setItem('refresh_token', refresh_token);
-    // Выходим из гостевого режима при входе
+    const tokens = await authApi.login(email, password);
+    setSessionTokens(tokens);
     exitGuestMode();
+
     try {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-      const userResponse = await axios.get<User>('http://localhost:8000/users/me');
-      setUser(userResponse.data);
+      setUser(await usersApi.current());
+      setToken(tokens.access_token);
     } catch {
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      setToken(null);
-      setUser(null);
-      delete axios.defaults.headers.common['Authorization'];
+      clearLocalSession();
       throw new Error('Не удалось загрузить профиль пользователя');
     }
   };
 
   const register = async (username: string, email: string, password: string) => {
-    await axios.post('http://localhost:8000/auth/register', {
-      username,
-      email,
-      password,
-    });
-    // Require email verification before creating an authenticated session.
+    await authApi.register(username, email, password);
   };
 
-  const logout = () => {
-    const refreshToken = localStorage.getItem('refresh_token');
-    if (refreshToken) {
-      void axios.post(`${API_URL}/auth/logout`, { refresh_token: refreshToken }).catch(() => undefined);
-    }
-
-  // Сбрасываем состояние пользователя и гостя
-  setUser(null);
-  setIsGuest(false);
-  setIsLoading(false);  
-
-  // Очищаем всё из localStorage
-  localStorage.removeItem('access_token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user');
-  localStorage.removeItem('guest_mode');
-  
-  // Если используете axios с перехватчиками, сбросьте токен
-  delete axios.defaults.headers.common['Authorization'];
-};
-
-  const updateProfile = async (data: Partial<User>) => {
-    const response = await axios.put<User>(`${API_URL}/users/me`, data, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    setUser(prev => prev ? { ...prev, ...response.data } : null);
-    localStorage.setItem('user', JSON.stringify({ ...user, ...response.data }));
+  const updateProfile = async (data: UserUpdateRequest) => {
+    setUser(await usersApi.update(data));
   };
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
-    await axios.post(`${API_URL}/auth/change-password`, 
-      { current_password: currentPassword, new_password: newPassword },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    await authApi.changePassword(currentPassword, newPassword);
   };
 
-  const getProgressStats = async () => {
-  const response = await axios.get<ProgressStats>(`${API_URL}/progress/stats`, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-  return response.data;
-};
+  const getProgressStats = () => progressApi.stats();
 
-const completeLesson = async (word: string) => {
-  await axios.post(`${API_URL}/progress/complete/${encodeURIComponent(word)}`, {}, {
-    headers: { Authorization: `Bearer ${token}` }
-  });
-};
+  const completeLesson = async (word: string) => {
+    await progressApi.complete(word);
+  };
 
   const deleteAccount = async (password: string) => {
-    await axios.delete(API_URL + "/users/me", {
-      headers: { Authorization: "Bearer " + token },
-      data: { password },
-    });
-    logout();
+    await usersApi.remove(password);
+    clearLocalSession();
   };
-  useEffect(() => {
-  const checkAuth = async () => {
-    const storedToken = localStorage.getItem('access_token');
-    const guestMode = localStorage.getItem('guest_mode') === 'true';
-
-    // Если включен гостевой режим
-    if (guestMode) {
-      setIsGuest(true);
-      setIsLoading(false);
-      return;
-    }
-
-    // Если есть токен, пробуем получить данные пользователя
-    if (storedToken) {
-      try {
-        setToken(storedToken);
-        axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
-        const userResponse = await axios.get<User>(`${API_URL}/users/me`);
-        setUser(userResponse.data);
-      } catch {
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        setToken(null);
-      }
-    }
-    setIsLoading(false);
-  };
-
-  checkAuth();
-}, []);
 
   return (
     <AuthContext.Provider
@@ -239,7 +175,7 @@ const completeLesson = async (word: string) => {
         changePassword,
         deleteAccount,
         getProgressStats,
-        completeLesson
+        completeLesson,
       }}
     >
       {children}

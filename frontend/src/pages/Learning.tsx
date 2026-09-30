@@ -2,15 +2,8 @@ import React, { useState, useEffect } from 'react';
 import LeftTOC from '../components/LeftTOC';
 import CameraView from '../components/CameraView';
 import { useAuth } from '../contexts/AuthContext';
-
-const API_URL = import.meta.env.VITE_API_URL;
-
-interface VideoInfo {
-  id: number;
-  filename: string;
-  description: string;
-  object_name: string;
-}
+import { videosApi } from '../services/api';
+import type { VideoInfo } from '../types/api';
 
 export default function Learning() {
   const { completeLesson } = useAuth();
@@ -38,11 +31,7 @@ export default function Learning() {
       setLoadingList(true);
       setListError(null);
       try {
-        const response = await fetch(`${API_URL}/videos/`);
-        if (!response.ok) {
-          throw new Error('Ошибка загрузки списка видео');
-        }
-        const data = await response.json();
+        const data = await videosApi.list();
         setVideos(data);
 
         if (data.length > 0) {
@@ -62,24 +51,9 @@ export default function Learning() {
   useEffect(() => {
     if (!selectedObjectName) return;
 
-    const fetchVideoUrl = async () => {
-      setLoadingVideo(true);
-      setVideoError(null);
-      try {
-        const response = await fetch(`${API_URL}/videos/stream/${encodeURIComponent(selectedObjectName)}`);
-        if (!response.ok) {
-          throw new Error('Видео не найдено');
-        }
-        // Прямой URL на прокси-эндпоинт
-        setVideoUrl(`${API_URL}/videos/stream/${encodeURIComponent(selectedObjectName)}`);
-      } catch (err) {
-        setVideoError('Не удалось загрузить видео');
-      } finally {
-        setLoadingVideo(false);
-      }
-    };
-
-    fetchVideoUrl();
+    setLoadingVideo(true);
+    setVideoError(null);
+    setVideoUrl(videosApi.streamUrl(selectedObjectName));
   }, [selectedObjectName]);
 
   const handleSelect = (selectedDisplay: string) => {
@@ -135,13 +109,18 @@ export default function Learning() {
             {videoError}
           </div>
         )}
-        {videoUrl && !loadingVideo && (
+        {videoUrl && (
           <video
             key={videoUrl}
             src={videoUrl}
             controls
             className="w-full rounded-lg shadow-md"
             autoPlay={false}
+            onLoadedData={() => setLoadingVideo(false)}
+            onError={() => {
+              setLoadingVideo(false);
+              setVideoError('Не удалось загрузить видео');
+            }}
           />
         )}
         {!loadingVideo && !videoError && !videoUrl && selectedObjectName && (

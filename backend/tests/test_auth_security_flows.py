@@ -195,6 +195,42 @@ def test_refresh_tokens_are_hashed_rotated_and_revocable(api):
     ).status_code == 401
 
 
+def test_password_change_revokes_every_refresh_session(api):
+    client, engine, sent_emails = api
+    first_session = _register_and_login(client, engine, sent_emails)
+    second_login = client.post(
+        "/auth/login",
+        data={"username": "learner@example.com", "password": "GoodPass1"},
+    )
+    assert second_login.status_code == 200, second_login.text
+    second_session = second_login.json()
+
+    changed = client.post(
+        "/auth/change-password",
+        json={"current_password": "GoodPass1", "new_password": "NewSecure9"},
+        headers={"Authorization": f"Bearer {first_session['access_token']}"},
+    )
+    assert changed.status_code == 200, changed.text
+
+    for refresh_token in (
+        first_session["refresh_token"],
+        second_session["refresh_token"],
+    ):
+        response = client.post(
+            "/auth/refresh", json={"refresh_token": refresh_token}
+        )
+        assert response.status_code == 401
+
+    assert client.post(
+        "/auth/login",
+        data={"username": "learner@example.com", "password": "GoodPass1"},
+    ).status_code == 401
+    assert client.post(
+        "/auth/login",
+        data={"username": "learner@example.com", "password": "NewSecure9"},
+    ).status_code == 200
+
+
 def test_admin_and_video_upload_routes_enforce_roles(api, monkeypatch):
     client, engine, sent_emails = api
     user_tokens = _register_and_login(

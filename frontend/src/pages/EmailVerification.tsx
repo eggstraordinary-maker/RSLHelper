@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
-
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:8000";
+import { authApi } from "../services/api";
 
 const EmailVerification: React.FC = () => {
   const { token: pathToken } = useParams<{ token: string }>();
@@ -31,7 +29,7 @@ const EmailVerification: React.FC = () => {
       }
 
       try {
-        await axios.post(`${API_URL}/auth/verify-email`, { token });
+        await authApi.verifyEmail(token);
         setMessage("Email подтверждён. Теперь можно войти в систему.");
         setIsError(false);
         window.setTimeout(() => navigate("/"), 3000);

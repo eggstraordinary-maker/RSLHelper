@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext'; // Импортируем useAuth
+import { getApiErrorMessage } from '../services/apiClient';
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -32,8 +33,8 @@ export default function Register() {
     try {
       await register(formData.name, formData.email, formData.password);
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка регистрации');
+    } catch (error) {
+      setError(getApiErrorMessage(error, 'Ошибка регистрации'));
     }
   };
 
