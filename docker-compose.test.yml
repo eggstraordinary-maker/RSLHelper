@@ -1,0 +1,28 @@
+# Reproducible checks on the same Python/Node versions as CI, with isolated data.
+services:
+  backend-tests:
+    build:
+      context: ./backend
+      target: tests
+    environment:
+      PYTHONPATH: /app
+      DATABASE_URL: sqlite:////tmp/rslhelper-tests.db
+      DATABASE_URL_ASYNC: sqlite+aiosqlite:////tmp/rslhelper-tests.db
+      SECRET_KEY: test-only-not-a-production-secret
+      SMTP_HOST: localhost
+      SMTP_PORT: "25"
+      SMTP_USER: test
+      SMTP_PASSWORD: test
+      EMAIL_FROM: test@example.com
+      S3_ENDPOINT_URL: http://localhost:8333
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    command: >
+      sh -c "python -m compileall -q app scripts &&
+      python -m ruff check --select E4,E7,E9,F --ignore F401 app tests alembic scripts &&
+      python -m pytest tests -q"
+    profiles: [test]
+  frontend-tests:
+    build: ./frontend
+    command: sh -c "npm audit --audit-level=low && npm run typecheck && npm test && npm run build"
+    profiles: [test]

@@ -4,7 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routers import auth, users, language, videos, progress, admin
+from app.routers import auth, users, language, videos, progress, admin, recognition
 from app.middleware.language_middleware import LanguageMiddleware
 
 class CustomCORSMiddleware(CORSMiddleware):
@@ -70,6 +70,7 @@ app.include_router(language.router)
 app.include_router(videos.router)
 app.include_router(progress.router)
 app.include_router(admin.router)
+app.include_router(recognition.router)
 
 @app.get("/")
 async def root():

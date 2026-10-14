@@ -10,13 +10,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.dependencies import get_current_admin_user
 from app.models import VideoFile
+from app.schemas import VideoResponse
 from app.services.storage import storage
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/upload")
+@router.post("/upload", response_model=VideoResponse)
 async def upload_video(
     file: UploadFile = File(...),
     description: str = Form(""),
@@ -47,13 +48,16 @@ async def upload_video(
     return video
 
 
-@router.get("/")
+@router.get("/", response_model=list[VideoResponse])
 def list_videos(db: Session = Depends(get_db)):
-    return db.query(VideoFile).all()
+    return db.query(VideoFile).filter(
+        VideoFile.is_published.is_(True), VideoFile.object_name.isnot(None)
+    ).order_by(VideoFile.id).all()
 
 
 @router.get("/{object_name}")
-def get_video(object_name: str):
+def get_video(object_name: str, db: Session = Depends(get_db)):
+    _require_published_video(db, object_name)
     try:
         url = storage.presigned_get_object(
             object_name,
@@ -67,7 +71,8 @@ def get_video(object_name: str):
 
 
 @router.get("/stream/{object_name}")
-def stream_video(request: Request, object_name: str):
+def stream_video(request: Request, object_name: str, db: Session = Depends(get_db)):
+    _require_published_video(db, object_name)
     try:
         response = storage.get_object(object_name)
     except Exception as exc:
@@ -88,3 +93,12 @@ def stream_video(request: Request, object_name: str):
             "Accept-Ranges": "bytes"
         }
     )
+
+
+def _require_published_video(db: Session, object_name: str) -> VideoFile:
+    video = db.query(VideoFile).filter(
+        VideoFile.object_name == object_name, VideoFile.is_published.is_(True)
+    ).first()
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return video

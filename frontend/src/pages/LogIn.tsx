@@ -39,8 +39,11 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label className="block mb-1">{t('auth:email')}</label>
+          <label htmlFor="login-email" className="block mb-1">{t('auth:email')}</label>
           <input
+            id="login-email"
+            type="email"
+            autoComplete="username"
             className="w-full p-2 border rounded-md"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -49,9 +52,11 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
         </div>
 
         <div>
-          <label className="block mb-1">{t('auth:password')}</label>
+          <label htmlFor="login-password" className="block mb-1">{t('auth:password')}</label>
           <input
+            id="login-password"
             type="password"
+            autoComplete="current-password"
             className="w-full p-2 border rounded-md"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

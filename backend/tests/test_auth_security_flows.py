@@ -331,12 +331,13 @@ def test_video_storage_errors_are_sanitized_and_progress_is_user_scoped(
     catalog = client.get("/videos/")
     assert catalog.status_code == 200
     assert catalog.json()[0]["object_name"] == "lesson-object"
-    completed = client.post("/progress/complete/hello", headers=first_headers)
+    lesson_id = catalog.json()[0]["lesson_id"]
+    completed = client.put(f"/progress/lessons/{lesson_id}/completion", headers=first_headers)
     assert completed.status_code == 200, completed.text
     stats = client.get("/progress/stats", headers=first_headers)
     assert stats.status_code == 200
     assert stats.json()["completed_lessons"] == 1
-    assert stats.json()["recent_lessons"] == ["hello"]
+    assert stats.json()["recent_lessons"] == ["Hello"]
 
     second_tokens = _register_and_login(
         client, engine, sent_emails, email="another@example.com"
@@ -355,7 +356,7 @@ def test_video_storage_errors_are_sanitized_and_progress_is_user_scoped(
 
     monkeypatch.setattr("app.routers.videos.storage.get_object", fail_to_read)
     caplog.clear()
-    video_error = client.get("/videos/stream/missing-object")
+    video_error = client.get("/videos/stream/lesson-object")
     assert video_error.status_code == 404
     assert sensitive_storage_error not in video_error.text
     assert sensitive_storage_error not in caplog.text

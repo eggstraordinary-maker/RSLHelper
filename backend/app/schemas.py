@@ -124,9 +124,36 @@ class UserProgress(UserProgressBase):
     id: int
     user_id: int
     completed_at: datetime | None
+    lesson_id: str
+
+
+class PracticeAttempt(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    completed: bool = False
+
+
+class LegacyProgress(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    progress_id: int
+    word: str
+    status: str
+    completed: bool | None
+    attempts: int | None
+    completed_at: datetime | None
 
 class ProgressStats(BaseModel):
     total_lessons: int
     completed_lessons: int
     completed_percentage: float
     recent_lessons: list[str]
+    unresolved_legacy_records: int = 0
+
+
+class VideoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    lesson_id: str
+    filename: str
+    description: str | None
+    object_name: str | None
+    is_published: bool

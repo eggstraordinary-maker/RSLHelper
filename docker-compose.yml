@@ -40,6 +40,35 @@ services:
     networks:
       - app-network
 
+  seaweedfs-console:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        if [ -z "$$WEED_ADMIN_PASSWORD" ]; then
+          echo "Set WEED_ADMIN_PASSWORD in seaweedfs/.env.admin"
+          exit 1
+        fi
+        exec /entrypoint.sh admin -master=seaweedfs:9333 -dataDir=/data
+    env_file:
+      - ./seaweedfs/.env.admin
+    environment:
+      WEED_S3_PUBLIC_ENDPOINT: http://localhost:8333
+    ports:
+      - "127.0.0.1:23646:23646"
+    volumes:
+      - seaweedfs_console_data:/data
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:23646/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    networks:
+      - app-network
+
   backend:
     build: ./backend
     env_file:
@@ -63,6 +92,12 @@ services:
     command: >
       sh -c "alembic -c alembic.ini upgrade head &&
       uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
     networks:
       - app-network
 
@@ -73,17 +108,21 @@ services:
     environment:
       - VITE_API_URL=http://localhost:8000
       - CHOKIDAR_USEPOLLING=true
+      - VITE_RECOGNITION_URL=${VITE_RECOGNITION_URL:-}
+      - VITE_RECOGNITION_TRANSPORT=${VITE_RECOGNITION_TRANSPORT:-websocket}
     volumes:
       - ./frontend:/app
       - /app/node_modules
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
       - app-network
 
 volumes:
   postgres_data:
   seaweedfs_data:
+  seaweedfs_console_data:
 
 networks:
   app-network:

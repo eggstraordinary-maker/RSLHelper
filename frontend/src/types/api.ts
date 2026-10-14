@@ -44,6 +44,7 @@ export interface ProgressStats {
   completed_lessons: number;
   completed_percentage: number;
   recent_lessons: string[];
+  unresolved_legacy_records: number;
 }
 
 export interface MessageResponse {
@@ -52,6 +53,8 @@ export interface MessageResponse {
 
 export interface VideoInfo {
   id: number;
+  lesson_id: string;
+  is_published: boolean;
   filename: string;
   description: string | null;
   object_name: string;
@@ -65,8 +68,20 @@ export interface UserUpdateRequest {
 export interface UserProgress {
   id: number;
   user_id: number;
+  lesson_id: string;
   word: string;
   completed: boolean;
   completed_at: string | null;
   attempts: number;
+}
+
+export interface RecognitionStatus {
+  protocol_version: '1.0';
+  available: boolean;
+  configured: boolean;
+  transport: 'websocket';
+  reason: 'not_configured' | 'provider_unavailable' | 'ready';
+  max_frame_bytes: number;
+  max_frames_per_second: number;
+  max_in_flight: number;
 }

@@ -10,6 +10,7 @@ export default function Dictionary() {
 
   const [selectedObjectName, setSelectedObjectName] = useState<string | null>(null);
   const [selectedDescription, setSelectedDescription] = useState<string>('');
+  const [selectedLessonId, setSelectedLessonId] = useState<string>('');
 
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [loadingVideo, setLoadingVideo] = useState(false);
@@ -26,6 +27,7 @@ export default function Dictionary() {
         if (data.length > 0) {
           setSelectedObjectName(data[0].object_name);
           setSelectedDescription(data[0].description || data[0].filename);
+          setSelectedLessonId(data[0].lesson_id);
         }
       } catch (err) {
         setListError('Не удалось загрузить список видео');
@@ -44,15 +46,16 @@ export default function Dictionary() {
   setVideoUrl(videosApi.streamUrl(selectedObjectName));
   }, [selectedObjectName]);
 
-  const handleSelect = (selectedDisplay: string) => {
-    const video = videos.find(v => (v.description || v.filename) === selectedDisplay);
+  const handleSelect = (lessonId: string) => {
+    const video = videos.find(v => v.lesson_id === lessonId);
     if (video) {
       setSelectedObjectName(video.object_name);
       setSelectedDescription(video.description || video.filename);
+      setSelectedLessonId(video.lesson_id);
     }
   };
 
-  const tocItems = videos.map(v => v.description || v.filename);
+  const tocItems = videos.map(v => ({ id: v.lesson_id, label: v.description || v.filename }));
 
   if (loadingList) {
     return <div className="text-center py-8">Загрузка списка жестов...</div>;
@@ -68,7 +71,7 @@ export default function Dictionary() {
 
    return (
     <div className="grid grid-cols-1 xl:grid-cols-[auto_1fr] gap-4 lg:gap-6">
-      <LeftTOC items={tocItems} active={selectedDescription} onSelect={handleSelect} />
+      <LeftTOC items={tocItems} active={selectedLessonId} onSelect={handleSelect} />
 
       <div className="space-y-4">
         {loadingVideo && <div className="text-center py-8 text-gray-500">Загрузка видео...</div>}

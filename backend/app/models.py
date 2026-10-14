@@ -4,7 +4,7 @@ from hashlib import sha256
 import secrets
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint, true
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -84,6 +84,9 @@ class VideoFile(Base):
     __tablename__ = "video_files"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Stable lesson identity survives changes to titles, filenames and S3 keys.
+    lesson_id = Column(String(36), unique=True, nullable=False, default=generate_uuid)
+    is_published = Column(Boolean, nullable=False, default=True, server_default=true())
 
     filename = Column(String(255), nullable=False)
 
@@ -96,10 +99,32 @@ class VideoFile(Base):
 
 class UserLearningProgress(Base):
     __tablename__ = "user_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "lesson_id", name="uq_user_progress_user_lesson"),
+        CheckConstraint("attempts >= 0", name="ck_user_progress_attempts_nonnegative"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # NULL is reserved for preserved, unresolved legacy progress.
+    lesson_id = Column(String(36), ForeignKey("video_files.lesson_id"), nullable=True)
     word = Column(String(100), nullable=False)
     completed = Column(Boolean, default=False)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     attempts = Column(Integer, default=0)
+
+
+class LegacyProgressMapping(Base):
+    """Lossless audit of the old word-based records and migration decisions."""
+
+    __tablename__ = "legacy_progress_mapping"
+
+    progress_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    word = Column(String(100), nullable=False)
+    candidate_lesson_ids = Column(Text, nullable=False)
+    lesson_id = Column(String(36), nullable=True)
+    status = Column(String(20), nullable=False)
+    completed = Column(Boolean, nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    attempts = Column(Integer, nullable=True)

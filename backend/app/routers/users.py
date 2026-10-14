@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete
 
 from app.database import get_async_db
 from app.dependencies import get_current_active_user
@@ -38,6 +39,8 @@ async def delete_user_account(
     if not auth.verify_password(request.password, current_user.hashed_password):
         raise HTTPException(status_code=400, detail="Incorrect password")
     await crud.revoke_user_refresh_tokens(db, current_user.id)
+    await db.execute(delete(models.UserLearningProgress).where(models.UserLearningProgress.user_id == current_user.id))
+    await db.execute(delete(models.LegacyProgressMapping).where(models.LegacyProgressMapping.user_id == current_user.id))
     await db.delete(current_user)
     await db.commit()
     return Response(status_code=204)

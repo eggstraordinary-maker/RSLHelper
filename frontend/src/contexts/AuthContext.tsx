@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import type { ProgressStats, User, UserUpdateRequest } from '../types/api';
+import type { ProgressStats, User, UserProgress, UserUpdateRequest } from '../types/api';
 import { authApi, progressApi, usersApi } from '../services/api';
 import {
   AUTH_SESSION_EXPIRED_EVENT,
@@ -31,7 +31,7 @@ interface AuthContextType {
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   getProgressStats: () => Promise<ProgressStats>;
-  completeLesson: (word: string) => Promise<void>;
+  completeLesson: (lessonId: string) => Promise<UserProgress>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -150,9 +150,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const getProgressStats = () => progressApi.stats();
 
-  const completeLesson = async (word: string) => {
-    await progressApi.complete(word);
-  };
+  const completeLesson = (lessonId: string) => progressApi.complete(lessonId);
 
   const deleteAccount = async (password: string) => {
     await usersApi.remove(password);

@@ -59,7 +59,7 @@ export default function BottomNav({ active, availableTabs, onChange }: BottomNav
           }
           onChange(tab);
         }}
-        className={`flex-1 py-2 px-2 flex flex-col items-center justify-center focus:outline-none transition-all ${
+        className={`flex-1 py-2 px-2 flex flex-col items-center justify-center focus:outline-hidden transition-all ${
           isActive
             ? 'text-indigo-600'
             : isAvailable

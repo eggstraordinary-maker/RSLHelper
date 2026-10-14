@@ -3,6 +3,7 @@ import type {
   MessageResponse,
   ProgressStats,
   RegisterResponse,
+  RecognitionStatus,
   User,
   UserProgress,
   UserUpdateRequest,
@@ -84,10 +85,29 @@ export const progressApi = {
     return data;
   },
 
-  async complete(word: string): Promise<UserProgress> {
+  async list(): Promise<UserProgress[]> {
+    const { data } = await apiClient.get<UserProgress[]>('/progress/lessons');
+    return data;
+  },
+
+  async practice(lessonId: string): Promise<UserProgress> {
     const { data } = await apiClient.post<UserProgress>(
-      `/progress/complete/${encodeURIComponent(word)}`,
+      `/progress/lessons/${encodeURIComponent(lessonId)}/attempts`, { completed: false },
     );
+    return data;
+  },
+
+  async complete(lessonId: string): Promise<UserProgress> {
+    const { data } = await apiClient.put<UserProgress>(
+      `/progress/lessons/${encodeURIComponent(lessonId)}/completion`,
+    );
+    return data;
+  },
+};
+
+export const recognitionApi = {
+  async status(): Promise<RecognitionStatus> {
+    const { data } = await publicApiClient.get<RecognitionStatus>('/recognition/status');
     return data;
   },
 };

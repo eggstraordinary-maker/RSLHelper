@@ -25,6 +25,7 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = False
+    recognition_endpoint_url: str | None = None
 
     # S3-compatible object storage (SeaweedFS in Docker Compose)
     s3_endpoint_url: str
