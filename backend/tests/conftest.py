@@ -5,7 +5,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///./rslhelper-tests.db")
 os.environ.setdefault(
     "DATABASE_URL_ASYNC", "sqlite+aiosqlite:///./rslhelper-tests.db"
 )
-os.environ.setdefault("SECRET_KEY", "test-only-secret-key-change-in-production")
+os.environ.setdefault("SECRET_KEY", "test-only-secret-key-change-in-production-64-byte-placeholder-value")
 os.environ.setdefault("SMTP_HOST", "localhost")
 os.environ.setdefault("SMTP_PORT", "25")
 os.environ.setdefault("SMTP_USER", "test")

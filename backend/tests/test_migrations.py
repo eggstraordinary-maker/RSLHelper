@@ -2,12 +2,17 @@ import os
 from datetime import datetime, timedelta
 import hashlib
 from pathlib import Path
+import re
+from uuid import uuid4
+
+import pytest
 
 from alembic import command
 from alembic.config import Config
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from sqlalchemy import create_engine, inspect, MetaData, Table, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
 from app import models
@@ -16,9 +21,41 @@ from app.database import Base
 ALEMBIC_INI = Path(__file__).parents[1] / "alembic.ini"
 
 
+@pytest.fixture
+def migration_url(tmp_path: Path):
+    """Every PostgreSQL test owns a new database, never the configured app DB."""
+    backend = os.getenv("MIGRATION_TEST_BACKEND", "sqlite")
+    if backend == "sqlite":
+        yield f"sqlite:///{(tmp_path / 'migration.db').as_posix()}"
+        return
+    if backend != "postgresql" or not os.getenv("POSTGRES_TEST_URL"):
+        pytest.fail("PostgreSQL migration checks require POSTGRES_TEST_URL")
+    admin_url = make_url(os.environ["POSTGRES_TEST_URL"])
+    if admin_url.get_backend_name() != "postgresql":
+        pytest.fail("POSTGRES_TEST_URL must use PostgreSQL")
+    name = "rsl_migration_test_" + uuid4().hex
+    assert re.fullmatch(r"rsl_migration_test_[0-9a-f]{32}", name)
+    assert name != admin_url.database
+    admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    created = False
+    try:
+        with admin.connect() as connection:
+            connection.execute(text(f'CREATE DATABASE "{name}"'))
+        created = True
+        yield admin_url.set(database=name).render_as_string(hide_password=False)
+    finally:
+        if created:
+            # Only the exact random database created by this fixture is removed.
+            assert re.fullmatch(r"rsl_migration_test_[0-9a-f]{32}", name)
+            assert name != admin_url.database
+            with admin.connect() as connection:
+                connection.execute(text(f'DROP DATABASE "{name}" WITH (FORCE)'))
+        admin.dispose()
+
+
 def _upgrade(database_url: str, revision: str = "head") -> None:
     config = Config(str(ALEMBIC_INI))
-    config.set_main_option("sqlalchemy.url", database_url)
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
     previous_url = os.environ.get("DATABASE_URL")
     os.environ["DATABASE_URL"] = database_url
     try:
@@ -30,8 +67,8 @@ def _upgrade(database_url: str, revision: str = "head") -> None:
             os.environ["DATABASE_URL"] = previous_url
 
 
-def test_fresh_database_bootstraps_all_application_tables(tmp_path: Path) -> None:
-    database_url = f"sqlite:///{(tmp_path / 'fresh.db').as_posix()}"
+def test_fresh_database_bootstraps_all_application_tables(migration_url: str) -> None:
+    database_url = migration_url
     _upgrade(database_url)
 
     engine = create_engine(database_url)
@@ -52,8 +89,8 @@ def test_fresh_database_bootstraps_all_application_tables(tmp_path: Path) -> Non
     assert "alembic_version" in tables
 
 
-def test_legacy_database_is_adopted_without_losing_rows(tmp_path: Path) -> None:
-    database_url = f"sqlite:///{(tmp_path / 'legacy.db').as_posix()}"
+def test_legacy_database_is_adopted_without_losing_rows(migration_url: str) -> None:
+    database_url = migration_url
     engine = create_engine(database_url)
     try:
         _upgrade(database_url, "0001_legacy_schema")
@@ -115,9 +152,9 @@ def test_legacy_database_is_adopted_without_losing_rows(tmp_path: Path) -> None:
 
 
 def test_progress_migration_preserves_unknown_ambiguous_and_duplicate_rows(
-    tmp_path: Path,
+    migration_url: str,
 ):
-    url = f"sqlite:///{(tmp_path / 'progress.db').as_posix()}"
+    url = migration_url
     _upgrade(url, "0002_hash_auth_tokens")
     engine = create_engine(url)
     old = MetaData()
@@ -192,6 +229,22 @@ def test_progress_migration_preserves_unknown_ambiguous_and_duplicate_rows(
                     "attempts": 1,
                     "completed_at": datetime(2026, 1, 3),
                 },
+                {
+                    "id": 5,
+                    "user_id": 1,
+                    "word": "Unknown-negative",
+                    "completed": False,
+                    "attempts": -9,
+                    "completed_at": None,
+                },
+                {
+                    "id": 6,
+                    "user_id": 1,
+                    "word": "Unknown-null",
+                    "completed": False,
+                    "attempts": None,
+                    "completed_at": None,
+                },
             ],
         )
     _upgrade(url)
@@ -207,18 +260,22 @@ def test_progress_migration_preserves_unknown_ambiguous_and_duplicate_rows(
         identities = (
             db.execute(select(videos.c.lesson_id).order_by(videos.c.id)).scalars().all()
         )
-    assert len(rows) == 4  # no original source row was deleted
+    assert len(rows) == 6  # no original source row was deleted
     assert rows[0]["lesson_id"] == identities[0]
     assert rows[0]["attempts"] == 5
-    assert rows[0]["completed_at"] == datetime(2026, 1, 1)
+    assert rows[0]["completed_at"].replace(tzinfo=None) == datetime(2026, 1, 1)
     assert all(row["lesson_id"] is None for row in rows[1:])
     assert [row["status"] for row in audit] == [
         "mapped",
         "duplicate",
         "ambiguous",
         "unmatched",
+        "unmatched",
+        "unmatched",
     ]
-    assert [row["attempts"] for row in audit] == [2, 3, 4, 1]
+    assert [row["attempts"] for row in audit] == [2, 3, 4, 1, -9, None]
+    assert rows[4]["attempts"] == 0
+    assert rows[5]["attempts"] is None
     assert len(set(identities)) == 3
     assert "uq_user_progress_user_lesson" in {
         c["name"] for c in inspect(engine).get_unique_constraints("user_progress")
@@ -232,8 +289,8 @@ def test_progress_migration_preserves_unknown_ambiguous_and_duplicate_rows(
     engine.dispose()
 
 
-def test_legacy_token_column_sizes_are_aligned_without_changing_digests(tmp_path: Path):
-    url = f"sqlite:///{(tmp_path / 'digest-columns.db').as_posix()}"
+def test_legacy_token_column_sizes_are_aligned_without_changing_digests(migration_url: str):
+    url = migration_url
     _upgrade(url, "0002_hash_auth_tokens")
     engine = create_engine(url)
     before = inspect(engine)
@@ -270,3 +327,34 @@ def test_legacy_token_column_sizes_are_aligned_without_changing_digests(tmp_path
         assert session.query(models.RefreshToken).one().token_hash == digest
         assert session.query(models.EmailVerification).one().token_hash == digest
     engine.dispose()
+
+
+def test_data_migration_downgrade_requires_a_backup_and_preserves_data(migration_url):
+    _upgrade(migration_url)
+    engine = create_engine(migration_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                models.User.__table__.insert().values(
+                    email="rollback@example.test", username="rollback", hashed_password="fixture", role="user"
+                )
+            )
+        config = Config(str(ALEMBIC_INI))
+        config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
+        previous_url = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = migration_url
+        try:
+            with pytest.raises(RuntimeError, match="Restore a pre-migration database backup"):
+                command.downgrade(config, "0002_hash_auth_tokens")
+        finally:
+            if previous_url is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous_url
+        with engine.connect() as connection:
+            assert connection.scalar(select(models.User.email)) == "rollback@example.test"
+            if engine.dialect.name == "postgresql":
+                assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_auth_digest_columns"
+                assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+    finally:
+        engine.dispose()

@@ -9,6 +9,7 @@ const getUserMedia = vi.fn();
 const track = () => ({ stop: vi.fn(), onended: null as (() => void) | null });
 const media = (tracks = [track()]) => ({ getTracks: () => tracks }) as unknown as MediaStream;
 const start = () => fireEvent.click(screen.getByRole('button', { name: 'Включить камеру' }));
+const initialMediaDevices = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
 
 describe('camera lifecycle', () => {
   beforeEach(() => {
@@ -17,7 +18,13 @@ describe('camera lifecycle', () => {
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
     vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
   });
-  afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    if (initialMediaDevices) Object.defineProperty(navigator, 'mediaDevices', initialMediaDevices);
+    else Reflect.deleteProperty(navigator, 'mediaDevices');
+  });
 
   it('requests access only on click and stops every track on stop and unmount', async () => {
     const tracks = [track(), track()];
@@ -75,5 +82,93 @@ describe('camera lifecycle', () => {
     start();
     expect(screen.getByText(/HTTPS или localhost/)).toBeTruthy();
     expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['mediaDevices is absent', undefined],
+    ['getUserMedia is absent', {}],
+  ])('explains unsupported browsers when %s', (_description, devices) => {
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: devices });
+    render(<CameraView />);
+    start();
+    expect(screen.getByText('Этот браузер не поддерживает доступ к камере.')).toBeTruthy();
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Включить камеру' })).toBeTruthy();
+  });
+
+  it('releases all tracks after playback fails and allows a fresh successful start', async () => {
+    const failedTracks = [track(), track()];
+    const nextTracks = [track()];
+    getUserMedia.mockResolvedValueOnce(media(failedTracks)).mockResolvedValueOnce(media(nextTracks));
+    vi.mocked(HTMLMediaElement.prototype.play).mockRejectedValueOnce(new Error('Playback failed'));
+    render(<CameraView />);
+    start();
+    await screen.findByText('Не удалось включить камеру. Повторите попытку.');
+    failedTracks.forEach(item => {
+      expect(item.stop).toHaveBeenCalledTimes(1);
+      expect(item.onended).toBeNull();
+    });
+    expect((screen.getByLabelText('Просмотр камеры') as HTMLVideoElement).srcObject).toBeNull();
+
+    start();
+    await screen.findByRole('button', { name: 'Выключить камеру' });
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(nextTracks[0].stop).not.toHaveBeenCalled();
+    expect(screen.queryByText('Не удалось включить камеру. Повторите попытку.')).toBeNull();
+  });
+
+  it('shows a retryable generic error for an unknown camera failure', async () => {
+    getUserMedia.mockRejectedValueOnce(new Error('Unknown device failure')).mockResolvedValueOnce(media());
+    render(<CameraView />);
+    start();
+    await screen.findByText('Не удалось включить камеру. Повторите попытку.');
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    start();
+    await screen.findByRole('button', { name: 'Выключить камеру' });
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels permission acquisition without unmounting and stops the late stream', async () => {
+    const cancelledTracks = [track(), track()];
+    let resolve!: (stream: MediaStream) => void;
+    getUserMedia.mockReturnValueOnce(new Promise<MediaStream>(done => { resolve = done; }));
+    render(<CameraView />);
+    start();
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить запуск камеры' }));
+    expect(screen.getByText('Камера выключена.')).toBeTruthy();
+    await act(async () => { resolve(media(cancelledTracks)); });
+    cancelledTracks.forEach(item => expect(item.stop).toHaveBeenCalledTimes(1));
+    expect(screen.getByText('Камера выключена.')).toBeTruthy();
+    expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Просмотр камеры') as HTMLVideoElement).srcObject).toBeNull();
+
+    const nextTracks = [track()];
+    getUserMedia.mockResolvedValueOnce(media(nextTracks));
+    start();
+    await screen.findByRole('button', { name: 'Выключить камеру' });
+    expect(nextTracks[0].stop).not.toHaveBeenCalled();
+  });
+
+  it('does not replace or stop a new active stream when a cancelled acquisition resolves later', async () => {
+    const cancelledTracks = [track()];
+    const currentTracks = [track()];
+    const currentStream = media(currentTracks);
+    let resolveCancelled!: (stream: MediaStream) => void;
+    getUserMedia
+      .mockReturnValueOnce(new Promise<MediaStream>(done => { resolveCancelled = done; }))
+      .mockResolvedValueOnce(currentStream);
+    render(<CameraView />);
+    start();
+    fireEvent.click(screen.getByRole('button', { name: 'Отменить запуск камеры' }));
+    start();
+    await screen.findByRole('button', { name: 'Выключить камеру' });
+
+    await act(async () => { resolveCancelled(media(cancelledTracks)); });
+    expect(cancelledTracks[0].stop).toHaveBeenCalledTimes(1);
+    expect(currentTracks[0].stop).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Просмотр камеры') as HTMLVideoElement).srcObject).toBe(currentStream);
+    expect(screen.getByRole('button', { name: 'Выключить камеру' })).toBeTruthy();
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalledTimes(1);
   });
 });

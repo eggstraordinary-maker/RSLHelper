@@ -10,12 +10,13 @@ RUN apt-get update && apt-get install -y \
 
 # Копирование зависимостей
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m pip install --no-cache-dir --upgrade pip==26.2.2 setuptools==84.2.1 \
+    && python -m pip install --no-cache-dir -r requirements.txt
 
 # Копирование приложения
 FROM base AS tests
 COPY requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements-dev.txt
+RUN python -m pip install --no-cache-dir -r requirements-dev.txt
 COPY . .
 CMD ["python", "-m", "pytest", "tests", "-q"]
 

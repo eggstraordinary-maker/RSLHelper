@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Learning from './Learning';
 import { progressApi, videosApi } from '../services/api';
@@ -22,10 +22,18 @@ const saved = (lesson = lessons[0], attempts = 1, completed = false): UserProgre
   completed_at: completed ? '2026-10-14T12:00:00Z' : null,
 });
 const repeat = () => screen.getByRole('button', { name: 'Я повторил(а) жест' }) as HTMLButtonElement;
+const complete = () => screen.getByRole('button', { name: 'Отметить урок пройденным' }) as HTMLButtonElement;
+const practice = () => within(screen.getByRole('region', { name: 'Самостоятельная практика' }));
+const deferred = <T,>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+};
 
 describe('self practice', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     vi.mocked(videosApi.list).mockResolvedValue(lessons);
     vi.mocked(progressApi.list).mockResolvedValue([]);
     vi.mocked(progressApi.practice).mockResolvedValue(saved());
@@ -92,5 +100,101 @@ describe('self practice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Повторить загрузку уроков' }));
     await screen.findByText('Уроков пока нет. Загляните позже.');
     expect(screen.queryByRole('button', { name: 'Я повторил(а) жест' })).toBeNull();
+  });
+
+  it('keeps an incomplete lesson and its attempts when completion fails, then retries', async () => {
+    vi.mocked(progressApi.list).mockResolvedValue([saved(lessons[0], 4)]);
+    vi.mocked(progressApi.complete)
+      .mockRejectedValueOnce(new Error('Offline'))
+      .mockResolvedValueOnce(saved(lessons[0], 4, true));
+    render(<Learning />);
+    await waitFor(() => expect(complete().disabled).toBe(false));
+
+    fireEvent.click(complete());
+    await practice().findByRole('alert');
+    expect(practice().getByText('4')).toBeTruthy();
+    expect(practice().getByText('Урок ещё не отмечен пройденным.')).toBeTruthy();
+    expect(practice().queryByText('Урок отмечен пройденным.')).toBeNull();
+    expect(complete().disabled).toBe(false);
+
+    fireEvent.click(complete());
+    await practice().findByText('Урок отмечен пройденным.');
+    expect(practice().getByText('4')).toBeTruthy();
+    expect(complete().disabled).toBe(true);
+    expect(progressApi.complete).toHaveBeenNthCalledWith(1, lessons[0].lesson_id);
+    expect(progressApi.complete).toHaveBeenNthCalledWith(2, lessons[0].lesson_id);
+    expect(progressApi.practice).not.toHaveBeenCalled();
+  });
+
+  it('retries a failed reference video with a new element and clears loading after playback data arrives', async () => {
+    render(<Learning />);
+    const failedVideo = await screen.findByLabelText('Эталонный жест');
+    fireEvent.error(failedVideo);
+    const retry = screen.getByRole('button', { name: 'Повторить загрузку видео' });
+    expect(screen.getByRole('alert').textContent).toContain('Не удалось загрузить эталонное видео.');
+    expect(screen.queryByText('Загрузка эталонного видео…')).toBeNull();
+
+    fireEvent.click(retry);
+    const retriedVideo = screen.getByLabelText('Эталонный жест');
+    expect(retriedVideo).not.toBe(failedVideo);
+    expect(retriedVideo.getAttribute('src')).toBe('/videos/stream/one');
+    expect(screen.queryByRole('button', { name: 'Повторить загрузку видео' })).toBeNull();
+    expect(screen.getByText('Загрузка эталонного видео…')).toBeTruthy();
+
+    fireEvent.loadedData(retriedVideo);
+    expect(screen.queryByText('Загрузка эталонного видео…')).toBeNull();
+    expect(screen.queryByText('Не удалось загрузить эталонное видео.')).toBeNull();
+  });
+
+  it.each(['practice', 'completion'] as const)('sends only one %s request for rapid repeated clicks', async action => {
+    const pending = deferred<UserProgress>();
+    vi.mocked(progressApi.list).mockResolvedValue([saved(lessons[0], 2)]);
+    const request = action === 'practice' ? progressApi.practice : progressApi.complete;
+    vi.mocked(request).mockReturnValue(pending.promise);
+    render(<Learning />);
+    await waitFor(() => expect(complete().disabled).toBe(false));
+
+    const button = action === 'practice' ? repeat() : complete();
+    act(() => {
+      button.click();
+      button.click();
+      button.click();
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledWith(lessons[0].lesson_id);
+    expect(repeat().disabled).toBe(true);
+    expect(complete().disabled).toBe(true);
+
+    await act(async () => { pending.resolve(saved(lessons[0], action === 'practice' ? 3 : 2, action === 'completion')); });
+    expect(practice().getByText(action === 'practice' ? '3' : '2')).toBeTruthy();
+    expect(repeat().disabled).toBe(false);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['success', 'failure'] as const)('keeps a pending save %s attached to its original lesson after selection changes', async outcome => {
+    const pending = deferred<UserProgress>();
+    vi.mocked(progressApi.list).mockResolvedValue([saved(lessons[0], 2), saved(lessons[1], 7)]);
+    vi.mocked(progressApi.practice).mockReturnValue(pending.promise);
+    render(<Learning />);
+    await waitFor(() => expect(repeat().disabled).toBe(false));
+    fireEvent.click(repeat());
+    fireEvent.click(screen.getAllByRole('button', { name: 'Same' })[1]);
+    expect(practice().getByText('7')).toBeTruthy();
+    expect(repeat().disabled).toBe(true);
+
+    await act(async () => {
+      if (outcome === 'success') pending.resolve(saved(lessons[0], 3));
+      else pending.reject(new Error('Offline'));
+    });
+    expect(practice().getByText('7')).toBeTruthy();
+    expect(practice().queryByText('Самостоятельная практика сохранена.')).toBeNull();
+    expect(practice().queryByRole('alert')).toBeNull();
+    expect(repeat().disabled).toBe(false);
+    expect(progressApi.practice).toHaveBeenCalledExactlyOnceWith(lessons[0].lesson_id);
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Same' })[0]);
+    expect(practice().getByText(outcome === 'success' ? '3' : '2')).toBeTruthy();
+    if (outcome === 'success') expect(practice().getByText('Самостоятельная практика сохранена.')).toBeTruthy();
+    else expect(practice().getByRole('alert')).toBeTruthy();
   });
 });

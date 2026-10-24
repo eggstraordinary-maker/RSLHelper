@@ -1,8 +1,9 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 import hashlib
 import secrets
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 import bcrypt  # Импортируем bcrypt напрямую
 from app.config import settings
 from app.schemas import TokenData
@@ -19,8 +20,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         bool: True если пароль верный, иначе False
 
-    Raises:
-        ValueError: Если хэш имеет неверный формат
+    Некорректный хэш или неподдерживаемая длина возвращают False.
     """
     try:
         # bcrypt работает с байтами
@@ -29,7 +29,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
             hashed_password.encode('utf-8')
         )
     except (ValueError, TypeError):
-        # Логируем ошибку, но возвращаем False для безопасности
+        # Не раскрываем пароль или хэш при ошибке проверки.
         return False
 
 
@@ -44,8 +44,8 @@ def get_password_hash(password: str) -> str:
         str: Хэшированный пароль в виде строки
 
     Note:
-        bcrypt автоматически обрезает пароль до 72 байт.
-        Пароли длиннее 72 байт будут усечены без предупреждения.
+        Общая политика паролей проверяет ограничение bcrypt в 72 байта
+        до вызова хеширования. bcrypt 5 отклоняет превышение лимита.
     """
     # Генерируем соль и хэшируем пароль
     salt = bcrypt.gensalt()
@@ -55,12 +55,11 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Создает JWT access токен"""
-    # TODO: исправить deprecated
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+    if expires_delta is not None:
+        expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
 
     to_encode.update({"exp": expire, "type": "access"})
     encoded_jwt = jwt.encode(to_encode, settings.secret_key, algorithm=settings.algorithm)
@@ -70,7 +69,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def create_refresh_token(data: dict) -> str:
     """Создает JWT refresh токен"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(days=settings.refresh_token_expire_days)
+    expire = datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
     to_encode.update({
         "exp": expire,
         "type": "refresh",
@@ -83,33 +82,39 @@ def create_refresh_token(data: dict) -> str:
 def verify_token(token: str) -> Optional[TokenData]:
     """Проверяет валидность access токена"""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm],
+            options={"require": ["exp", "sub", "type"]},
+        )
         public_id: str = payload.get("sub")  # В sub хранится public_id (строка)
         token_type: str = payload.get("type")
 
-        if public_id is None or token_type != "access":
+        if not isinstance(public_id, str) or not public_id or token_type != "access":
             return None
 
         # Возвращаем TokenData с public_id, а не user_id
         return TokenData(public_id=public_id)
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
 def verify_refresh_token(token: str) -> Optional[TokenData]:
     """Проверяет валидность refresh токена"""
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        payload = jwt.decode(
+            token, settings.secret_key, algorithms=[settings.algorithm],
+            options={"require": ["exp", "sub", "type"]},
+        )
         public_id: str = payload.get("sub")
         token_type: str = payload.get("type")
         token_id: str = payload.get("jti")
 
-        if public_id is None or token_type != "refresh":
+        if not isinstance(public_id, str) or not public_id or token_type != "refresh":
             return None
 
         # Возвращаем TokenData с public_id, а не user_id
         return TokenData(public_id=public_id, token_id=token_id)
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 

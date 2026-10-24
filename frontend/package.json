@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -26,12 +27,13 @@
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^4.0.0",
+    "@vitest/coverage-v8": "5.0.5",
     "axios-mock-adapter": "^2.1.0",
     "baseline-browser-mapping": "^2.9.11",
     "jsdom": "^29.1.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.1.6",
     "vite": "^7.1.12",
-    "vitest": "^5.0.2"
+    "vitest": "5.0.5"
   }
 }
