@@ -7,9 +7,9 @@ export default function Translator() {
       <CameraView />
 
       <div className="bg-white border rounded-lg p-4">
-        <h4 className="font-semibold mb-2">Распознанный текст (заглушка)</h4>
+        <h4 className="font-semibold mb-2">Перевод жестов</h4>
         <div className="min-h-[80px] text-lg text-gray-700 flex items-center">
-          <span className="text-gray-400">[Здесь появится текст, распознанный с камеры]</span>
+          <span className="text-gray-500">Перевод появится после подключения сервиса распознавания. Сейчас доступен только просмотр камеры для самопроверки.</span>
         </div>
       </div>
     </div>

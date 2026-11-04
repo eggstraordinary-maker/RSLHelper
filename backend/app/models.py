@@ -1,8 +1,18 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text
-from sqlalchemy.sql import func
 from datetime import datetime, timedelta
-from app.database import Base
+from enum import Enum
+from hashlib import sha256
+import secrets
 import uuid
+
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint, true
+from sqlalchemy.sql import func
+
+from app.database import Base
+
+
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
 
 
 def generate_uuid():
@@ -22,6 +32,9 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
+    role = Column(String, default=UserRole.USER.value, nullable=False)
+
     # Дополнительные поля для профиля
     full_name = Column(String(200))
     avatar_url = Column(String(500))
@@ -38,23 +51,29 @@ class EmailVerification(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), nullable=False, index=True)
-    token = Column(String(100), unique=True, index=True, nullable=False)
+    token_hash = Column("token", String(64), unique=True, index=True, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_used = Column(Boolean, default=False)
 
     @classmethod
-    def create_for_email(cls, email: str) -> "EmailVerification":
-        token = generate_uuid()
+    def create_for_email(cls, email: str) -> tuple["EmailVerification", str]:
+        token = secrets.token_urlsafe(32)
         expires_at = datetime.utcnow() + timedelta(hours=24)
-        return cls(email=email, token=token, expires_at=expires_at)
+        verification = cls(
+            email=email,
+            token_hash=sha256(token.encode("utf-8")).hexdigest(),
+            expires_at=expires_at,
+        )
+        return verification, token
 
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
 
     id = Column(Integer, primary_key=True, index=True)
-    token = Column(String(500), unique=True, index=True, nullable=False)
+    # Preserve the legacy column name but store only a one-way token digest.
+    token_hash = Column("token", String(64), unique=True, index=True, nullable=False)
     user_id = Column(Integer, nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -65,6 +84,9 @@ class VideoFile(Base):
     __tablename__ = "video_files"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Stable lesson identity survives changes to titles, filenames and S3 keys.
+    lesson_id = Column(String(36), unique=True, nullable=False, default=generate_uuid)
+    is_published = Column(Boolean, nullable=False, default=True, server_default=true())
 
     filename = Column(String(255), nullable=False)
 
@@ -73,3 +95,36 @@ class VideoFile(Base):
     object_name = Column(String(255), unique=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class UserLearningProgress(Base):
+    __tablename__ = "user_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "lesson_id", name="uq_user_progress_user_lesson"),
+        CheckConstraint("attempts >= 0", name="ck_user_progress_attempts_nonnegative"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # NULL is reserved for preserved, unresolved legacy progress.
+    lesson_id = Column(String(36), ForeignKey("video_files.lesson_id"), nullable=True)
+    word = Column(String(100), nullable=False)
+    completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    attempts = Column(Integer, default=0)
+
+
+class LegacyProgressMapping(Base):
+    """Lossless audit of the old word-based records and migration decisions."""
+
+    __tablename__ = "legacy_progress_mapping"
+
+    progress_id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, nullable=False)
+    word = Column(String(100), nullable=False)
+    candidate_lesson_ids = Column(Text, nullable=False)
+    lesson_id = Column(String(36), nullable=True)
+    status = Column(String(20), nullable=False)
+    completed = Column(Boolean, nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    attempts = Column(Integer, nullable=True)

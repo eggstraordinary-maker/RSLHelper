@@ -1,9 +1,12 @@
 import smtplib
+import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from jinja2 import Template
 from app.config import settings
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def send_email(to_email: str, subject: str, body_html: str) -> bool:
@@ -22,8 +25,9 @@ def send_email(to_email: str, subject: str, body_html: str) -> bool:
             server.send_message(msg)
 
         return True
-    except Exception as e:
-        print(f"Error sending email: {e}")
+    except Exception as exc:
+        # SMTP exceptions can include server details; keep diagnostics secret-free.
+        logger.warning("SMTP delivery failed (%s)", type(exc).__name__)
         return False
 
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import PasswordReset from "./PasswordReset";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from 'react-i18next';
+import { getApiErrorMessage } from '../services/apiClient';
 
 interface LoginProps {
   onClose: () => void;
@@ -25,8 +26,8 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
     try {
       await login(username, password);
       onLoginSuccess(); // Просто закрываем модальное окно
-    } catch (err: any) {
-      setError(err.response?.data?.detail || "Ошибка входа");
+    } catch (error) {
+      setError(getApiErrorMessage(error, "Ошибка входа"));
     }
   };
 
@@ -38,8 +39,11 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
-          <label className="block mb-1">{t('auth:email')}</label>
+          <label htmlFor="login-email" className="block mb-1">{t('auth:email')}</label>
           <input
+            id="login-email"
+            type="email"
+            autoComplete="username"
             className="w-full p-2 border rounded-md"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -48,9 +52,11 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
         </div>
 
         <div>
-          <label className="block mb-1">{t('auth:password')}</label>
+          <label htmlFor="login-password" className="block mb-1">{t('auth:password')}</label>
           <input
+            id="login-password"
             type="password"
+            autoComplete="current-password"
             className="w-full p-2 border rounded-md"
             value={password}
             onChange={(e) => setPassword(e.target.value)}

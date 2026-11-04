@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { getApiErrorMessage } from '../services/apiClient';
 
 interface UserProfile {
   id?: number;
@@ -9,8 +9,7 @@ interface UserProfile {
 }
 
 const Profile: React.FC = () => {
-  const { user, updateProfile, changePassword, deleteAccount, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, updateProfile, changePassword, deleteAccount, logout, getProgressStats } = useAuth();
   // Состояния для редактирования профиля
   const [editMode, setEditMode] = useState(false);
   const [profileForm, setProfileForm] = useState<UserProfile>({
@@ -43,6 +42,30 @@ const Profile: React.FC = () => {
     }
   }, [user]);
 
+  // Состояния для прогресса
+  const [progress, setProgress] = useState<{
+    total_lessons: number;
+    completed_lessons: number;
+    completed_percentage: number;
+    recent_lessons: string[];
+  } | null>(null);
+
+  // Загрузка прогресса при монтировании
+  useEffect(() => {
+    if (user) {
+      loadProgress();
+    }
+  }, [user]);
+
+  const loadProgress = async () => {
+    try {
+      const stats = await getProgressStats();
+      setProgress(stats);
+    } catch {
+      // Keep the profile usable if progress is temporarily unavailable.
+    }
+  };
+
   // Обработчики для редактирования профиля
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -53,11 +76,14 @@ const Profile: React.FC = () => {
     e.preventDefault();
     setProfileMessage(null);
     try {
-      await updateProfile(profileForm);
+      await updateProfile({ username: profileForm.username });
       setProfileMessage({ type: 'success', text: 'Профиль успешно обновлён' });
       setEditMode(false);
-    } catch (err: any) {
-      setProfileMessage({ type: 'error', text: err.response?.data?.detail || 'Ошибка обновления профиля' });
+    } catch (error) {
+      setProfileMessage({
+        type: 'error',
+        text: getApiErrorMessage(error, 'Ошибка обновления профиля'),
+      });
     }
   };
 
@@ -79,30 +105,29 @@ const Profile: React.FC = () => {
       setPasswordMessage({ type: 'success', text: 'Пароль успешно изменён' });
       setPasswordData({ current_password: '', new_password: '', confirm_password: '' });
       setShowPasswordForm(false);
-    } catch (err: any) {
-      setPasswordMessage({ type: 'error', text: err.response?.data?.detail || 'Ошибка смены пароля' });
+    } catch (error) {
+      setPasswordMessage({
+        type: 'error',
+        text: getApiErrorMessage(error, 'Ошибка смены пароля'),
+      });
     }
   };
 
   // Обработчик удаления аккаунта
   const handleDeleteAccount = async () => {
-    alert('handleDeleteAccount вызван!');   
-    console.log('handleDeleteAccount called')
     setDeleteError(null);
     if (!passwordForDelete) {
       setDeleteError('Введите пароль для подтверждения удаления');
       return;
     }
     try {
-      console.log('deleteAccount called')
       await deleteAccount(passwordForDelete);
-      console.log('after deleteAccount called')
       // Успешно удалили на сервере → выходим из системы и уходим на главную
       logout();
       // navigate('/', { replace: true });
       window.location.href = '/';
-    } catch (err: any) {
-      setDeleteError(err.response?.data?.detail || 'Ошибка удаления аккаунта. Проверьте пароль.');
+    } catch (error) {
+      setDeleteError(getApiErrorMessage(error, 'Ошибка удаления аккаунта. Проверьте пароль.'));
     }
   };
 
@@ -129,6 +154,40 @@ const Profile: React.FC = () => {
       </div>
 
       <h1 className="text-2xl font-bold mb-6">Личный кабинет</h1>
+
+       {/* Блок прогресса */}
+      {progress && (
+        <div className="bg-white rounded-lg shadow p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">Прогресс обучения</h2>
+          <div className="space-y-3">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-600">Пройдено уроков:</span>
+              <span className="font-bold text-lg">
+                {progress.completed_lessons} / {progress.total_lessons}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+              <div
+                className="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                style={{ width: `${progress.completed_percentage}%` }}
+              ></div>
+            </div>
+            <p className="text-sm text-gray-500">
+              Общий прогресс: {Math.round(progress.completed_percentage)}%
+            </p>
+            {progress.recent_lessons.length > 0 && (
+              <div className="mt-3">
+                <p className="text-sm font-medium text-gray-700">Недавно изученные жесты:</p>
+                <ul className="list-disc list-inside text-sm text-gray-600">
+                  {progress.recent_lessons.map((word, idx) => (
+                    <li key={idx}>{word}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Блок профиля */}
       <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -169,9 +228,8 @@ const Profile: React.FC = () => {
                 type="email"
                 name="email"
                 value={profileForm.email}
-                onChange={handleProfileChange}
-                className="w-full p-2 border rounded-md"
-                required
+                readOnly
+                className="w-full p-2 border rounded-md bg-gray-100 cursor-not-allowed"
               />
             </div>
             <div className="flex gap-2">

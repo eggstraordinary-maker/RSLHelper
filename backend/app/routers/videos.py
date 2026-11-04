@@ -1,30 +1,34 @@
-from fastapi import APIRouter, UploadFile, File, Form, Depends, Request
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-import uuid
 import io
+import logging
+import uuid
 from datetime import timedelta
 
+from fastapi import APIRouter, UploadFile, File, Form, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
+
 from app.database import get_db
+from app.dependencies import get_current_admin_user
 from app.models import VideoFile
-from app.services.storage import client, bucket
+from app.schemas import VideoResponse
+from app.services.storage import storage
 
 router = APIRouter(prefix="/videos", tags=["videos"])
+logger = logging.getLogger(__name__)
 
 
-@router.post("/upload")
+@router.post("/upload", response_model=VideoResponse)
 async def upload_video(
     file: UploadFile = File(...),
     description: str = Form(""),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _current_admin=Depends(get_current_admin_user),
 ):
-
     contents = await file.read()
 
     object_name = f"{uuid.uuid4()}_{file.filename}"
 
-    client.put_object(
-        bucket,
+    storage.put_object(
         object_name,
         io.BytesIO(contents),
         length=len(contents),
@@ -44,31 +48,57 @@ async def upload_video(
     return video
 
 
-@router.get("/")
+@router.get("/", response_model=list[VideoResponse])
 def list_videos(db: Session = Depends(get_db)):
-    return db.query(VideoFile).all()
+    return db.query(VideoFile).filter(
+        VideoFile.is_published.is_(True), VideoFile.object_name.isnot(None)
+    ).order_by(VideoFile.id).all()
 
 
 @router.get("/{object_name}")
-def get_video(object_name: str):
-
-    url = client.presigned_get_object(
-        bucket,
-        object_name,
-        expires=timedelta(hours=2)
-    )
+def get_video(object_name: str, db: Session = Depends(get_db)):
+    _require_published_video(db, object_name)
+    try:
+        url = storage.presigned_get_object(
+            object_name,
+            expires=timedelta(hours=2),
+        )
+    except Exception as exc:
+        logger.warning("Video link generation failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=404, detail="Video not found") from None
 
     return {"url": url}
 
 
 @router.get("/stream/{object_name}")
-def stream_video(request: Request, object_name: str):
-    response = client.get_object(bucket, object_name)
+def stream_video(request: Request, object_name: str, db: Session = Depends(get_db)):
+    _require_published_video(db, object_name)
+    try:
+        response = storage.get_object(object_name)
+    except Exception as exc:
+        logger.warning("Video retrieval failed (%s)", type(exc).__name__)
+        raise HTTPException(status_code=404, detail="Video not found") from None
+
+    def stream_chunks():
+        try:
+            while chunk := response.read(32 * 1024):
+                yield chunk
+        finally:
+            response.close()
 
     return StreamingResponse(
-        response.stream(32 * 1024),
+        stream_chunks(),
         media_type="video/mp4",
         headers={
             "Accept-Ranges": "bytes"
         }
     )
+
+
+def _require_published_video(db: Session, object_name: str) -> VideoFile:
+    video = db.query(VideoFile).filter(
+        VideoFile.object_name == object_name, VideoFile.is_published.is_(True)
+    ).first()
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return video

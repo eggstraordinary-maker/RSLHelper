@@ -1,8 +1,8 @@
-from pydantic_settings import BaseSettings
-from typing import Optional
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # Database
     database_url: str
     database_url_async: str
@@ -25,16 +25,14 @@ class Settings(BaseSettings):
 
     # App
     debug: bool = False
+    recognition_endpoint_url: str | None = None
 
-    # MinIO
-    minio_endpoint: str
-    minio_access_key: str
-    minio_secret_key: str
-    minio_bucket: str = "videos"
-    minio_secure: bool = False
-
-    class Config:
-        env_file = ".env"
-
+    # S3-compatible object storage (SeaweedFS in Docker Compose)
+    s3_endpoint_url: str
+    s3_public_endpoint_url: str | None = None
+    aws_access_key_id: str
+    aws_secret_access_key: str
+    s3_bucket: str = "videos"
+    s3_region: str = "us-east-1"
 
 settings = Settings()

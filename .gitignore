@@ -1,5 +1,7 @@
 # Backend / Python
 __pycache__/
+.pytest_cache/
+*.db
 *.py[cod]
 *.pyo
 *.pyd
@@ -40,3 +42,22 @@ Thumbs.db
 *.pid
 docker-compose.override.yml
 backend/pyvenv.cfg
+.npm-cache/
+.local-test-artifacts/
+seaweedfs/.env.admin
+
+# Local agent instructions and planning material
+AGENTS.md
+AGENTS.override.md
+.agents/
+.codex/
+.claude/
+agents_settings/
+/docs/
+/PLAN_RESTRUCTURING_2026-09-13.md
+/project-board*.json
+
+# Local checkouts, model artifacts and environment backups/examples
+.worktrees/
+/recognition/models/
+.env.*
