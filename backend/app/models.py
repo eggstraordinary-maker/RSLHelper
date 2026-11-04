@@ -21,6 +21,7 @@ def generate_uuid():
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = (UniqueConstraint("username", name="uq_users_username"),)
 
     id = Column(Integer, primary_key=True, index=True)
     public_id = Column(String(36), unique=True, index=True, default=generate_uuid)

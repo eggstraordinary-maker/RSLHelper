@@ -354,7 +354,60 @@ def test_data_migration_downgrade_requires_a_backup_and_preserves_data(migration
         with engine.connect() as connection:
             assert connection.scalar(select(models.User.email)) == "rollback@example.test"
             if engine.dialect.name == "postgresql":
-                assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_auth_digest_columns"
+                assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0005_username_uniqueness"
                 assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
+    finally:
+        engine.dispose()
+
+
+def test_username_constraint_preserves_case_sensitive_identity_and_downgrades(migration_url):
+    _upgrade(migration_url, "0004_auth_digest_columns")
+    engine = create_engine(migration_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(models.User.__table__.insert().values(
+                email="first@example.test", username="Account", hashed_password="fixture", role="user"
+            ))
+            connection.execute(models.User.__table__.insert().values(
+                email="second@example.test", username="account", hashed_password="fixture", role="user"
+            ))
+        _upgrade(migration_url)
+        assert "uq_users_username" in {c["name"] for c in inspect(engine).get_unique_constraints("users")}
+        with engine.connect() as connection:
+            assert connection.execute(select(models.User.username).order_by(models.User.id)).scalars().all() == ["Account", "account"]
+        config = Config(str(ALEMBIC_INI))
+        config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
+        previous = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = migration_url
+        try:
+            command.downgrade(config, "0004_auth_digest_columns")
+        finally:
+            if previous is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous
+        with engine.connect() as connection:
+            assert connection.scalar(select(models.User.email).where(models.User.username == "Account")) == "first@example.test"
+        _upgrade(migration_url)
+    finally:
+        engine.dispose()
+
+
+def test_username_migration_refuses_legacy_duplicates_without_changing_data(migration_url):
+    _upgrade(migration_url, "0004_auth_digest_columns")
+    engine = create_engine(migration_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(models.User.__table__.insert(), [
+                {"email": "duplicate-a@example.test", "username": "same_name", "hashed_password": "fixture", "role": "user"},
+                {"email": "duplicate-b@example.test", "username": "same_name", "hashed_password": "fixture", "role": "user"},
+            ])
+        with pytest.raises(RuntimeError, match="duplicate usernames exist"):
+            _upgrade(migration_url)
+        with engine.connect() as connection:
+            assert connection.execute(select(models.User.email).order_by(models.User.id)).scalars().all() == [
+                "duplicate-a@example.test", "duplicate-b@example.test"
+            ]
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0004_auth_digest_columns"
     finally:
         engine.dispose()

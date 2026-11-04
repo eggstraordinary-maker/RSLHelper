@@ -99,8 +99,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements*.txt
       - run: python -m pip install -r backend/requirements-dev.txt
-      - name: Fresh and legacy PostgreSQL migration regression checks
-        run: python -m pytest backend/tests/test_migrations.py -q
+      - name: PostgreSQL migration and account lifecycle regression checks
+        run: python -m pytest backend/tests/test_migrations.py backend/tests/test_accounts_postgresql.py -q
 
   frontend:
     runs-on: ubuntu-24.04
