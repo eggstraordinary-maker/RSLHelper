@@ -3,6 +3,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_async_db
 from app.dependencies import get_current_admin_user
 from app import models, schemas, crud
+from app.modules.accounts import public as accounts
+from app.modules.accounts.errors import AccountNotFoundError, AccountPermissionError, SelfDeletionError
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -25,11 +27,12 @@ async def delete_user(
     db: AsyncSession = Depends(get_async_db)
 ):
     """Удалить пользователя по ID (только для администратора)."""
-    user = await crud.get_user_by_id(db, user_id)
-    if not user:
-        raise HTTPException(status_code=404, detail="Пользователь не найден")
-    if user.id == current_admin.id:
-        raise HTTPException(status_code=400, detail="Администратор не может удалить сам себя")
-    
-    await crud.delete_user(db, user)
+    try:
+        await accounts.delete_account(db, user_id, admin_id=current_admin.id)
+    except AccountNotFoundError:
+        raise HTTPException(status_code=404, detail="Пользователь не найден") from None
+    except SelfDeletionError:
+        raise HTTPException(status_code=400, detail="Администратор не может удалить сам себя") from None
+    except AccountPermissionError:
+        raise HTTPException(status_code=403, detail="Недостаточно прав доступа") from None
     return None # 204 No Content

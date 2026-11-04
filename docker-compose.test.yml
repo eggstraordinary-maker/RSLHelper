@@ -26,3 +26,29 @@ services:
     build: ./frontend
     command: sh -c "npm audit --audit-level=low && npm run typecheck && npm run test:coverage && npm run build"
     profiles: [test]
+
+  postgres-tests:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ci
+      POSTGRES_PASSWORD: ci-postgres-password
+      POSTGRES_DB: rslhelper_ci
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ci -d rslhelper_ci"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    profiles: [test]
+
+  backend-postgres-tests:
+    build:
+      context: ./backend
+      target: tests
+    environment:
+      MIGRATION_TEST_BACKEND: postgresql
+      POSTGRES_TEST_URL: postgresql://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
+    depends_on:
+      postgres-tests:
+        condition: service_healthy
+    command: python -m pytest tests/test_migrations.py tests/test_accounts_postgresql.py -q
+    profiles: [test]
