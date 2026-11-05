@@ -21,8 +21,9 @@ from app.config import settings
 from app.services.storage import ObjectStorage, StoredObject, storage
 
 from . import repository as repo
+from .dto import LessonRecord
 from .errors import (
-    InvalidRangeError, MediaNotFoundError, MediaTooLargeError,
+    AmbiguousLessonError, InvalidRangeError, MediaNotFoundError, MediaTooLargeError,
     MediaUnavailableError, UnsupportedMediaError,
 )
 
@@ -224,11 +225,20 @@ async def upload_lesson(
         prepared.path.unlink(missing_ok=True)
 
 
-async def list_lessons(db: AsyncSession):
+async def resolve_legacy_label(db: AsyncSession, label: str) -> LessonRecord:
+    lessons = await repo.published_by_label(db, label)
+    if not lessons:
+        raise MediaNotFoundError("Lesson not found")
+    if len(lessons) > 1:
+        raise AmbiguousLessonError("Ambiguous lesson; use lesson_id")
+    return lessons[0]
+
+
+async def list_lessons(db: AsyncSession) -> list[LessonRecord]:
     return await repo.published_lessons(db)
 
 
-async def get_lesson(db: AsyncSession, lesson_id: str):
+async def get_lesson(db: AsyncSession, lesson_id: str) -> LessonRecord:
     lesson = await repo.published_lesson(db, lesson_id)
     if lesson is None:
         raise MediaNotFoundError("Video not found")
@@ -269,7 +279,7 @@ def _not_found(exc: Exception) -> bool:
     return response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404 or response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}
 
 
-async def read_media(lesson: repo.LessonRecord, *, range_header: str | None, if_range: str | None, head: bool) -> MediaRead:
+async def read_media(lesson: LessonRecord, *, range_header: str | None, if_range: str | None, head: bool) -> MediaRead:
     try:
         metadata = await run_in_threadpool(storage.stat_object, lesson.object_name)
     except Exception as exc:
@@ -296,7 +306,7 @@ async def read_media(lesson: repo.LessonRecord, *, range_header: str | None, if_
     return MediaRead(metadata.size, start, end, selected is not None, body)
 
 
-async def legacy_url(lesson: repo.LessonRecord) -> str:
+async def legacy_url(lesson: LessonRecord) -> str:
     try:
         return await run_in_threadpool(storage.presigned_get_object, lesson.object_name, timedelta(hours=2))
     except Exception as exc:

@@ -6,7 +6,8 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from fastapi.testclient import TestClient
 
-from app import auth, crud, models
+from app import auth, models
+from app.modules.accounts import public as accounts
 from app.database import Base
 from app.main import app
 from app.schemas import PasswordChange, PasswordResetConfirm, UserCreate, UserUpdate
@@ -80,14 +81,14 @@ async def test_profile_update_and_duplicate_username_are_handled(
     await db_session.commit()
     await db_session.refresh(learner)
 
-    updated = await crud.update_user(
-        db_session, learner, UserUpdate(username="new_name", full_name="Learner")
+    updated = await accounts.update_profile(
+        db_session, learner.id, UserUpdate(username="new_name", full_name="Learner")
     )
     assert updated.username == "new_name"
     assert updated.full_name == "Learner"
 
     with pytest.raises(ValueError, match="already in use"):
-        await crud.update_user(db_session, learner, UserUpdate(username="another"))
+        await accounts.update_profile(db_session, learner.id, UserUpdate(username="another"))
 
 
 @pytest.mark.asyncio
@@ -105,6 +106,6 @@ async def test_email_verification_token_is_consumed_once(
     await db_session.commit()
 
     assert verification.token_hash == auth.hash_token(raw_token)
-    assert await crud.verify_email_token(db_session, raw_token) is True
+    assert await accounts.verify_email(db_session, raw_token) is True
     assert learner.is_verified is True
-    assert await crud.verify_email_token(db_session, raw_token) is False
+    assert await accounts.verify_email(db_session, raw_token) is False

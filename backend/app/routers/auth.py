@@ -2,11 +2,10 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
-from app import auth, crud, email_utils, models
+from app import email_utils
 from app.config import settings
 from app.database import get_async_db
 from app.dependencies import get_current_active_user
@@ -81,7 +80,7 @@ async def login(
 
 @router.post("/verify-email/{token}")
 async def verify_email(token: str, db: AsyncSession = Depends(get_async_db)):
-    if not await crud.verify_email_token(db, token):
+    if not await accounts.verify_email(db, token):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     return {"message": "Email verified successfully"}
 
@@ -91,7 +90,7 @@ async def verify_email_from_body(
     request: EmailVerificationTokenRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
-    if not await crud.verify_email_token(db, request.token):
+    if not await accounts.verify_email(db, request.token):
         raise HTTPException(status_code=400, detail="Invalid or expired token")
     return {"message": "Email verified successfully"}
 
@@ -102,23 +101,15 @@ async def resend_verification(
     request: EmailVerificationRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
-    user = await crud.get_user_by_email(db, request.email)
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    if user.is_verified:
-        raise HTTPException(status_code=400, detail="Email already verified")
-
     try:
-        _verification, verification_token = await crud.create_email_verification(
-            db, user.email
-        )
+        verification_token = await accounts.create_verification(db, request.email)
     except AccountNotFoundError:
         raise HTTPException(status_code=404, detail="User not found") from None
     except EmailAlreadyVerifiedError:
         raise HTTPException(status_code=400, detail="Email already verified") from None
     verification_url = f"{settings.frontend_url}/verify-email#{verification_token}"
     if not await _send_email_safely(
-        email_utils.send_verification_email, user.email, verification_url
+        email_utils.send_verification_email, request.email, verification_url
     ):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -172,18 +163,7 @@ async def logout(
     request: RefreshTokenRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
-    token_data = auth.verify_refresh_token(request.refresh_token)
-    if token_data is not None:
-        await db.execute(
-            update(models.RefreshToken)
-            .where(
-                models.RefreshToken.token_hash
-                == auth.hash_token(request.refresh_token),
-                models.RefreshToken.is_revoked.is_(False),
-            )
-            .values(is_revoked=True)
-        )
-        await db.commit()
+    await accounts.logout(db, request.refresh_token)
     # Logout stays idempotent and does not reveal whether a token was stored.
     return {"message": "Logged out"}
 
@@ -191,7 +171,7 @@ async def logout(
 @router.post("/change-password")
 async def change_password(
     password_data: PasswordChange,
-    current_user: models.User = Depends(get_current_active_user),
+    current_user: UserResponse = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_async_db),
 ):
     try:

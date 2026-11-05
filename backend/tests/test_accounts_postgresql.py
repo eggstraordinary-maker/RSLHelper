@@ -369,7 +369,7 @@ async def test_resend_rechecks_verified_precondition_after_waiting_for_user_lock
         db.commit()
     precondition_read = asyncio.Event()
     verification_finished = asyncio.Event()
-    original = auth_router.crud.create_email_verification
+    original = auth_router.accounts.create_verification
 
     async def pause_before_real_service(*args):
         # Scheduling instrumentation only: both HTTP requests execute the real
@@ -378,7 +378,7 @@ async def test_resend_rechecks_verified_precondition_after_waiting_for_user_lock
         await verification_finished.wait()
         return await original(*args)
 
-    monkeypatch.setattr(auth_router.crud, "create_email_verification", pause_before_real_service)
+    monkeypatch.setattr(auth_router.accounts, "create_verification", pause_before_real_service)
     resend = asyncio.create_task(client.post("/auth/resend-verification", json={"email": user["email"]}))
     try:
         await asyncio.wait_for(precondition_read.wait(), timeout=5)

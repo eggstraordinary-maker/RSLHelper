@@ -1,21 +1,10 @@
 """Catalog persistence. Commit/rollback belong to the calling use case."""
 
-from dataclasses import dataclass
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import VideoFile
-
-
-@dataclass(frozen=True)
-class LessonRecord:
-    id: int
-    lesson_id: str
-    filename: str
-    description: str | None
-    object_name: str
-    is_published: bool
+from .dto import LessonRecord
 
 
 def _record(row: VideoFile) -> LessonRecord:
@@ -43,6 +32,13 @@ async def published_lesson(db: AsyncSession, lesson_id: str) -> LessonRecord | N
 async def published_object(db: AsyncSession, object_name: str) -> LessonRecord | None:
     row = await db.scalar(select(VideoFile).where(VideoFile.object_name == object_name, *_published()))
     return _record(row) if row is not None else None
+
+
+async def published_by_label(db: AsyncSession, label: str) -> list[LessonRecord]:
+    rows = await db.scalars(select(VideoFile).where(
+        (VideoFile.description == label) | (VideoFile.filename == label), *_published(),
+    ))
+    return [_record(row) for row in rows]
 
 
 async def add_lesson(db: AsyncSession, *, lesson_id: str, filename: str, description: str, object_name: str) -> LessonRecord:
