@@ -173,7 +173,7 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
             {tab === 'dictionary' && t('dictionary')}
             {tab === 'translator' && t('translator')}
             {tab === 'learning' && t('learning')}
-            {tab === 'admin' && 'Администрирование'}
+            {tab === 'admin' && t('admin_panel')}
           </h2>
         </div>
 

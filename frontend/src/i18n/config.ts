@@ -13,6 +13,8 @@ import enCommon from '../locales/en/common.json';
 import enAuth from '../locales/en/auth.json';
 import enDictionary from '../locales/en/dictionary.json';
 import enLearning from '../locales/en/learning.json';
+import ruAdmin from '../locales/ru/admin.json';
+import enAdmin from '../locales/en/admin.json';
 
 i18n
   .use(LanguageDetector)
@@ -24,18 +26,20 @@ i18n
         auth: ruAuth,
         dictionary: ruDictionary,
         learning: ruLearning,
+        admin: ruAdmin,
       },
       en: {
         common: enCommon,
         auth: enAuth,
         dictionary: enDictionary,
         learning: enLearning,
+        admin: enAdmin,
       },
     },
     fallbackLng: 'ru',
     debug: import.meta.env.DEV,
     
-    ns: ['common', 'auth', 'dictionary', 'learning'],
+    ns: ['common', 'auth', 'dictionary', 'learning', 'admin'],
     defaultNS: 'common',
     
     interpolation: {

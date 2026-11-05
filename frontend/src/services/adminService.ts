@@ -1,9 +1,10 @@
 import { User } from '../types/api';
 import { apiClient } from './apiClient';
 
-export const fetchAllUsers = async (skip = 0, limit = 100): Promise<User[]> => {
+export const fetchAllUsers = async (skip = 0, limit = 100, signal?: AbortSignal): Promise<User[]> => {
   const { data } = await apiClient.get<User[]>('/admin/users', {
     params: { skip, limit },
+    signal,
   });
   return data;
 };
