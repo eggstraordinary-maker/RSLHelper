@@ -33,7 +33,9 @@ test('guest dictionary uses real UUID media, keyboard selection, seeking, RU/EN 
   expect(range.status()).toBe(206);
   expect((await range.body()).byteLength).toBe(16);
   await media.evaluate((element: HTMLVideoElement) => { element.currentTime = Math.min(0.1, element.duration / 2); });
-  await expect.poll(() => media.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
+  await expect.poll(() => media.evaluate((element: HTMLVideoElement) =>
+    !element.seeking && element.readyState >= 2 && element.currentTime > 0,
+  )).toBe(true);
   await expect(page.getByRole('region', { name: 'Описание жеста' })).toContainText(`E2E practice ${fixture.run_id}`);
   for (const width of [320, 390, 768, 1440]) {
     await page.setViewportSize({ width, height: 844 });
