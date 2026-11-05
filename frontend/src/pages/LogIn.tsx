@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import PasswordReset from "./PasswordReset";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from 'react-i18next';
-import { getApiErrorMessage } from '../services/apiClient';
+import { AccountFeedback, useAccountAction, ResendVerification } from '../features/auth';
 
 interface LoginProps {
   onClose: () => void;
@@ -14,7 +14,7 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showForgot, setShowForgot] = useState(false);
-  const [error, setError] = useState("");
+  const action = useAccountAction();
   const { login } = useAuth();
   const { t } = useTranslation(['auth', 'common']);
 
@@ -22,20 +22,14 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
-    try {
-      await login(username, password);
-      onLoginSuccess(); // Просто закрываем модальное окно
-    } catch (error) {
-      setError(getApiErrorMessage(error, "Ошибка входа"));
-    }
+    if (await action.run(() => login(username, password), '', 'loginInvalid')) onLoginSuccess();
   };
 
   return (
     <div className="max-w-md mx-auto mt-10 p-6 rounded-xl shadow-lg bg-white">
       <h2 className="text-2xl font-semibold mb-4">{t('auth:login_title')}</h2>
 
-      {error && <div className="bg-red-100 text-red-700 p-2 rounded mb-4">{error}</div>}
+      <AccountFeedback message={action.message} failed={action.failed} />
 
       <form onSubmit={handleLogin} className="space-y-4">
         <div>
@@ -43,6 +37,7 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
           <input
             id="login-email"
             type="email"
+            required
             autoComplete="username"
             className="w-full p-2 border rounded-md"
             value={username}
@@ -56,6 +51,7 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
           <input
             id="login-password"
             type="password"
+            required
             autoComplete="current-password"
             className="w-full p-2 border rounded-md"
             value={password}
@@ -66,9 +62,10 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
 
         <button
           type="submit"
+          disabled={action.pending}
           className="w-full py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition"
         >
-          {t('common:login')}
+          {t(action.pending ? 'auth:sending' : 'common:login')}
         </button>
 
         <div className="flex gap-2">
@@ -89,6 +86,8 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
           </button>
         </div>
       </form>
+      <ResendVerification initialEmail={username} />
+      <button type="button" onClick={onGuestMode} className="mt-4 text-indigo-700">{t('common:continue_as_guest')}</button>
 
       <div className="mt-6 text-center space-y-3">
         <div className="text-sm text-gray-600">

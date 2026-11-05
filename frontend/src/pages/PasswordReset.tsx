@@ -1,77 +1,19 @@
-import React, { useState } from "react";
-import { authApi } from "../services/api";
-import { getApiErrorMessage } from "../services/apiClient";
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { authApi } from '../services/api';
+import { AccountField, AccountFeedback, useAccountAction, actionClass } from '../features/auth';
 
-interface Props {
-  onBack: () => void;
+export default function PasswordReset({ onBack }: { onBack: () => void }) {
+  const { t } = useTranslation('auth');
+  const [email, setEmail] = useState('');
+  const action = useAccountAction();
+  return <section className="max-w-md mx-auto p-6 space-y-4">
+    <h1 className="text-2xl font-semibold">{t('forgotTitle')}</h1>
+    <AccountFeedback message={action.message} failed={action.failed} />
+    <form className="space-y-4" onSubmit={event => { event.preventDefault(); void action.run(() => authApi.requestPasswordReset(email), 'resetRequested'); }}>
+      <AccountField name="reset-email" type="email" label={t('email')} value={email} onChange={setEmail} />
+      <button disabled={action.pending} className={actionClass}>{t(action.pending ? 'sending' : 'requestReset')}</button>
+    </form>
+    <button type="button" onClick={onBack}>{t('back')}</button>
+  </section>;
 }
-
-const PasswordReset: React.FC<Props> = ({ onBack }) => {
-  const [email, setEmail] = useState("");
-  const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-    try {
-      const response = await authApi.requestPasswordReset(email);
-      setMessage(response.message);
-      setIsError(false);
-    } catch (error) {
-      setMessage(getApiErrorMessage(error, "Не удалось отправить запрос. Попробуйте позже."));
-      setIsError(true);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="max-w-md mx-auto mt-10 p-6 rounded-xl shadow-lg bg-white">
-      <h2 className="text-2xl font-semibold mb-4">Восстановление пароля</h2>
-
-      {message && (
-        <div
-          role="status"
-          className={`mb-4 p-3 rounded ${isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
-        >
-          {message}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="reset-email" className="block mb-1">Email</label>
-          <input
-            id="reset-email"
-            type="email"
-            autoComplete="email"
-            className="w-full p-2 border rounded-md"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </div>
-
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="w-full py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition disabled:opacity-60"
-        >
-          {isSubmitting ? "Отправка…" : "Отправить ссылку для восстановления"}
-        </button>
-        <button
-          type="button"
-          onClick={onBack}
-          className="w-full py-2 bg-gray-200 text-black rounded-md hover:bg-gray-300 transition"
-        >
-          Назад
-        </button>
-      </form>
-    </div>
-  );
-};
-
-export default PasswordReset;
