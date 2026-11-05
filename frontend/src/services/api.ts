@@ -114,12 +114,12 @@ export const recognitionApi = {
 
 export const videosApi = {
   async list(): Promise<VideoInfo[]> {
-    const { data } = await apiClient.get<VideoInfo[]>('/videos/');
+    const { data } = await publicApiClient.get<VideoInfo[]>('/videos/lessons');
     return data;
   },
 
-  streamUrl(objectName: string): string {
-    return buildApiUrl(`/videos/stream/${encodeURIComponent(objectName)}`);
+  streamUrl(mediaPath: string): string {
+    return buildApiUrl(mediaPath);
   },
 };
 

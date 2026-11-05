@@ -57,7 +57,7 @@ export interface VideoInfo {
   is_published: boolean;
   filename: string;
   description: string | null;
-  object_name: string;
+  media_url: string;
 }
 
 export interface UserUpdateRequest {

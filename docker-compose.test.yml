@@ -38,7 +38,7 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
-    profiles: [test]
+    profiles: [test, e2e]
 
   backend-postgres-tests:
     build:
@@ -52,3 +52,95 @@ services:
         condition: service_healthy
     command: python -m pytest tests/test_migrations.py tests/test_accounts_postgresql.py -q
     profiles: [test]
+
+  seaweedfs-tests:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: [mini, -dir=/data, -ip=seaweedfs-tests, "-bucket=media-tests,videos", -master.telemetry=false, -admin.ui=false, -webdav=false]
+    environment:
+      AWS_ACCESS_KEY_ID: ci
+      AWS_SECRET_ACCESS_KEY: ci-s3-test-password
+    ports: ["127.0.0.1:18333:8333"]
+    healthcheck:
+      test: [CMD-SHELL, "curl -fsS http://localhost:9333/cluster/status >/dev/null && test \"$$(curl -s --max-time 2 -o /dev/null -w '%{http_code}' http://localhost:8333/)\" = 403"]
+      interval: 2s
+      timeout: 5s
+      retries: 40
+    profiles: [test, e2e]
+
+  backend-media-tests:
+    build:
+      context: ./backend
+      target: tests
+    environment:
+      MEDIA_INTEGRATION_TESTS: "1"
+      POSTGRES_TEST_URL: postgresql://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
+      S3_ENDPOINT_URL: http://seaweedfs-tests:8333
+      S3_BUCKET: media-tests
+      AWS_ACCESS_KEY_ID: ci
+      AWS_SECRET_ACCESS_KEY: ci-s3-test-password
+    depends_on:
+      postgres-tests:
+        condition: service_healthy
+      seaweedfs-tests:
+        condition: service_healthy
+    command: python -m pytest tests/test_media_storage_integration.py -q
+    profiles: [test]
+
+  e2e-backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
+      DATABASE_URL_ASYNC: postgresql+asyncpg://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
+      SECRET_KEY: ci-only-browser-test-not-a-production-secret-64-byte-placeholder-value
+      SMTP_HOST: localhost
+      SMTP_PORT: "25"
+      SMTP_USER: ci
+      SMTP_PASSWORD: ci
+      EMAIL_FROM: ci@example.com
+      FRONTEND_URL: http://localhost:5173
+      S3_ENDPOINT_URL: http://seaweedfs-tests:8333
+      S3_PUBLIC_ENDPOINT_URL: http://localhost:18333
+      S3_BUCKET: videos
+      AWS_ACCESS_KEY_ID: ci
+      AWS_SECRET_ACCESS_KEY: ci-s3-test-password
+    ports: ["127.0.0.1:8000:8000"]
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      postgres-tests:
+        condition: service_healthy
+      seaweedfs-tests:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    profiles: [e2e]
+
+  e2e-frontend:
+    build: ./frontend
+    environment:
+      VITE_API_URL: http://localhost:8000
+    ports: ["127.0.0.1:5173:5173"]
+    depends_on:
+      e2e-backend:
+        condition: service_healthy
+    profiles: [e2e]
+
+  e2e-console:
+    image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d
+    command: [admin, -master=seaweedfs-tests:9333, -dataDir=/data]
+    environment:
+      WEED_ADMIN_USER: ciadmin
+      WEED_ADMIN_PASSWORD: ci-console-test-password
+      WEED_S3_PUBLIC_ENDPOINT: http://localhost:18333
+    ports: ["127.0.0.1:23646:23646"]
+    depends_on:
+      seaweedfs-tests:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:23646/health]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    profiles: [e2e]

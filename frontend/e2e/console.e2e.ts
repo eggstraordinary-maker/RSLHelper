@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 
 test('SeaweedFS console requires login and lists the S3 bucket', async ({ page }) => {
-  const env = Object.fromEntries(readFileSync(resolve('../seaweedfs/.env.admin'), 'utf8').split(/\r?\n/)
+  const env = process.env.PLAYWRIGHT_CONSOLE_USER && process.env.PLAYWRIGHT_CONSOLE_PASSWORD
+    ? { WEED_ADMIN_USER: process.env.PLAYWRIGHT_CONSOLE_USER, WEED_ADMIN_PASSWORD: process.env.PLAYWRIGHT_CONSOLE_PASSWORD }
+    : Object.fromEntries(readFileSync(resolve('../seaweedfs/.env.admin'), 'utf8').split(/\r?\n/)
     .filter(line => line.includes('=') && !line.startsWith('#'))
     .map(line => { const index = line.indexOf('='); return [line.slice(0, index), line.slice(index + 1)]; }));
   await page.goto('http://localhost:23646/');
@@ -17,6 +19,6 @@ test('SeaweedFS console requires login and lists the S3 bucket', async ({ page }
   await expect(bucket).toBeVisible();
   await bucket.click();
   await expect(page).toHaveURL(/\/files\?path=\/buckets\/videos/);
-  const fixture = JSON.parse(readFileSync(resolve('../.local-test-artifacts/e2e-fixture.json'), 'utf8')) as { run_id: string };
-  await expect(page.getByRole('cell', { name: new RegExp(`e2e-${fixture.run_id}`) }).first()).toBeVisible();
+  const fixture = JSON.parse(readFileSync(resolve('../.local-test-artifacts/e2e-fixture.json'), 'utf8')) as { objects: string[] };
+  await expect(page.getByRole('cell').filter({ hasText: fixture.objects[0] }).first()).toBeVisible();
 });

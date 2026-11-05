@@ -98,7 +98,7 @@ export default function Learning() {
         <p className="mt-2 text-sm text-gray-600">Посмотрите эталонный клип, повторите жест и сохраните самостоятельную практику. Завершение урока — ваша отметка, автоматическая оценка модели сейчас недоступна.</p>
       </div>
       {videoLoading && !videoError && <p role="status">Загрузка эталонного видео…</p>}
-      <video key={`${selectedId}:${videoRetry}`} src={videosApi.streamUrl(selected.object_name)} controls playsInline
+      <video key={`${selectedId}:${videoRetry}`} src={videosApi.streamUrl(selected.media_url)} controls playsInline
         aria-label="Эталонный жест" className="w-full rounded-lg border"
         onLoadedData={() => setVideoLoading(false)} onError={() => { setVideoLoading(false); setVideoError(true); }} />
       {videoError && <div role="alert" className="rounded border p-4 text-red-700">Не удалось загрузить эталонное видео.

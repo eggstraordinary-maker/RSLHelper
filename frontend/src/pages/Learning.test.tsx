@@ -9,13 +9,13 @@ import type { UserProgress, VideoInfo } from '../types/api';
 vi.mock('../components/CameraView', () => ({ default: () => <div>Camera test boundary</div> }));
 vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ completeLesson: progressApi.complete }) }));
 vi.mock('../services/api', () => ({
-  videosApi: { list: vi.fn(), streamUrl: (key: string) => `/videos/stream/${key}` },
+  videosApi: { list: vi.fn(), streamUrl: (mediaPath: string) => mediaPath },
   progressApi: { list: vi.fn(), practice: vi.fn(), complete: vi.fn() },
 }));
 
 const lessons: VideoInfo[] = [
-  { id: 1, lesson_id: '11111111-1111-4111-8111-111111111111', filename: 'one.mp4', description: 'Same', object_name: 'one', is_published: true },
-  { id: 2, lesson_id: '22222222-2222-4222-8222-222222222222', filename: 'two.mp4', description: 'Same', object_name: 'two', is_published: true },
+  { id: 1, lesson_id: '11111111-1111-4111-8111-111111111111', filename: 'one.mp4', description: 'Same', media_url: '/videos/lessons/11111111-1111-4111-8111-111111111111/content', is_published: true },
+  { id: 2, lesson_id: '22222222-2222-4222-8222-222222222222', filename: 'two.mp4', description: 'Same', media_url: '/videos/lessons/22222222-2222-4222-8222-222222222222/content', is_published: true },
 ];
 const saved = (lesson = lessons[0], attempts = 1, completed = false): UserProgress => ({
   id: 1, user_id: 1, lesson_id: lesson.lesson_id, word: 'Same', attempts, completed,
@@ -52,7 +52,7 @@ describe('self practice', () => {
     await screen.findByText('Самостоятельная практика сохранена.');
     expect(progressApi.practice).toHaveBeenCalledWith(lessons[1].lesson_id);
     expect(progressApi.complete).not.toHaveBeenCalled();
-    expect((screen.getByLabelText('Эталонный жест') as HTMLVideoElement).getAttribute('src')).toBe('/videos/stream/two');
+    expect((screen.getByLabelText('Эталонный жест') as HTMLVideoElement).getAttribute('src')).toBe(lessons[1].media_url);
     expect(screen.getByText(/автоматическая оценка модели сейчас недоступна/)).toBeTruthy();
   });
 
@@ -137,7 +137,7 @@ describe('self practice', () => {
     fireEvent.click(retry);
     const retriedVideo = screen.getByLabelText('Эталонный жест');
     expect(retriedVideo).not.toBe(failedVideo);
-    expect(retriedVideo.getAttribute('src')).toBe('/videos/stream/one');
+    expect(retriedVideo.getAttribute('src')).toBe(lessons[0].media_url);
     expect(screen.queryByRole('button', { name: 'Повторить загрузку видео' })).toBeNull();
     expect(screen.getByText('Загрузка эталонного видео…')).toBeTruthy();
 

@@ -157,3 +157,14 @@ class VideoResponse(BaseModel):
     description: str | None
     object_name: str | None
     is_published: bool
+
+
+class LessonResponse(BaseModel):
+    """Published lesson contract independent of the internal object-store key."""
+
+    id: int
+    lesson_id: str
+    filename: str
+    description: str | None
+    is_published: bool
+    media_url: str = Field(description="Relative API URL of the published MP4")
