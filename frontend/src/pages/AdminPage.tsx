@@ -1,11 +1,13 @@
 import React from 'react';
-import UserList from '../components/admin/UserList';
+import { UserAdministration } from '../features/admin';
+import { useTranslation } from 'react-i18next';
 
 const AdminPage: React.FC = () => {
+  const { t } = useTranslation('admin');
   return (
     <div className="p-4">
-      <h1 className="text-2xl font-bold mb-4">Панель администратора</h1>
-      <UserList />
+      <h1 className="text-2xl font-bold mb-4">{t('title')}</h1>
+      <UserAdministration />
     </div>
   );
 };

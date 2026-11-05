@@ -1,0 +1,25 @@
+{
+  "title": "Administration",
+  "users": {
+    "title": "User list",
+    "table": "Users and actions",
+    "loading": "Loading users…",
+    "empty": "There are no users on this page",
+    "loadError": "Could not load users. Please retry.",
+    "forbidden": "Only administrators can manage users.",
+    "retry": "Retry loading users",
+    "refresh": "Refresh users",
+    "id": "ID", "email": "Email", "name": "Name", "role": "Role", "actions": "Actions",
+    "adminRole": "Administrator", "userRole": "User",
+    "delete": "Delete", "deleteNamed": "Delete user {{name}}",
+    "cannotDeleteSelf": "An administrator cannot delete themselves from this list",
+    "yourAccount": "Your account",
+    "confirmTitle": "Delete this user?",
+    "confirmDescription": "This user's profile and all learning progress will be permanently deleted.",
+    "confirm": "Confirm deletion", "cancel": "Cancel", "deleting": "Deleting…",
+    "deleted": "User deleted.", "alreadyDeleted": "The user was already deleted. The list has been refreshed.",
+    "deleteError": "Could not confirm deletion. Check your connection and retry.",
+    "deleteRejected": "The server rejected deletion. Refresh the list and check the selected user.",
+    "pagination": "User pages", "previous": "Previous", "next": "Next", "page": "Page {{number}}"
+  }
+}
