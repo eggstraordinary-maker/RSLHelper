@@ -40,18 +40,20 @@ async def _insert_user(db: AsyncSession, data: schemas.UserCreate):
     return user
 
 
-async def create_user(db: AsyncSession, data: schemas.UserCreate):
-    try:
-        user = await _insert_user(db, data)
-        await db.commit()
-        await db.refresh(user)
-        return user
-    except IntegrityError as exc:
-        await db.rollback()
-        raise _integrity_error(exc) from None
-    except BaseException:
-        await db.rollback()
-        raise
+async def get_principal(db: AsyncSession, public_id: str) -> schemas.UserResponse | None:
+    user = await repo.user_by_public_id(db, public_id)
+    return schemas.UserResponse.model_validate(user) if user is not None else None
+
+
+async def _require_admin(db: AsyncSession, admin_id: int):
+    actor = await repo.user_by_id(db, admin_id)
+    if actor is None or not actor.is_active or not actor.is_verified or actor.role != models.UserRole.ADMIN.value:
+        raise AccountPermissionError("Недостаточно прав доступа")
+
+
+async def list_users(db: AsyncSession, admin_id: int, *, skip: int = 0, limit: int = 100) -> list[schemas.UserResponse]:
+    await _require_admin(db, admin_id)
+    return [schemas.UserResponse.model_validate(user) for user in await repo.list_users(db, skip, limit)]
 
 
 async def register_account(db: AsyncSession, data: schemas.UserCreate):
@@ -84,9 +86,9 @@ async def update_profile(db: AsyncSession, user_id: int, data: schemas.UserUpdat
         for name, value in changes.items():
             setattr(user, name, value)
         await db.flush()
+        result = schemas.UserResponse.model_validate(user)
         await db.commit()
-        await db.refresh(user)
-        return user
+        return result
     except IntegrityError as exc:
         await db.rollback()
         raise _integrity_error(exc) from None
@@ -180,9 +182,7 @@ async def change_password(db: AsyncSession, user_id: int, current_password: str,
 async def delete_account(db: AsyncSession, user_id: int, *, password: str | None = None, admin_id: int | None = None):
     try:
         if admin_id is not None:
-            actor = await repo.user_by_id(db, admin_id)
-            if actor is None or not actor.is_active or not actor.is_verified or actor.role != models.UserRole.ADMIN.value:
-                raise AccountPermissionError("Недостаточно прав доступа")
+            await _require_admin(db, admin_id)
             if admin_id == user_id:
                 raise SelfDeletionError("Администратор не может удалить сам себя")
         user = await repo.user_by_id(db, user_id, lock=True)
@@ -199,16 +199,16 @@ async def delete_account(db: AsyncSession, user_id: int, *, password: str | None
         raise
 
 
-async def create_verification(db: AsyncSession, email: str):
+async def create_verification(db: AsyncSession, email: str) -> str:
     try:
         user = await repo.user_by_email(db, email, lock=True)
         if user is None:
             raise AccountNotFoundError("User not found")
         if user.is_verified:
             raise EmailAlreadyVerifiedError("Email already verified")
-        verification, token = await repo.replace_verification(db, user.email)
+        _, token = await repo.replace_verification(db, user.email)
         await db.commit()
-        return verification, token
+        return token
     except BaseException:
         await db.rollback()
         raise
@@ -252,6 +252,16 @@ async def issue_password_reset(db: AsyncSession, email: str):
         address = user.email
         await db.commit()
         return address, token
+    except BaseException:
+        await db.rollback()
+        raise
+
+
+async def logout(db: AsyncSession, raw_token: str) -> None:
+    try:
+        if auth.verify_refresh_token(raw_token) is not None:
+            await repo.revoke_refresh(db, auth.hash_token(raw_token))
+            await db.commit()
     except BaseException:
         await db.rollback()
         raise

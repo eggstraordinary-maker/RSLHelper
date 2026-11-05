@@ -26,6 +26,16 @@ async def user_by_username(db: AsyncSession, username: str):
     return await _user(db, models.User.username == username)
 
 
+async def list_users(db: AsyncSession, skip: int, limit: int):
+    return (await db.scalars(select(models.User).order_by(models.User.id).offset(skip).limit(limit))).all()
+
+
+async def revoke_refresh(db: AsyncSession, digest: str):
+    await db.execute(update(models.RefreshToken).where(
+        models.RefreshToken.token_hash == digest, models.RefreshToken.is_revoked.is_(False),
+    ).values(is_revoked=True))
+
+
 async def _user(db: AsyncSession, predicate, *, lock: bool = False):
     query = select(models.User).where(predicate)
     if lock:

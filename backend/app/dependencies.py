@@ -3,7 +3,9 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_async_db
-from app import crud, auth, models
+from app import auth
+from app.modules.accounts import public as accounts
+from app.schemas import UserResponse
 
 security = HTTPBearer(auto_error=False)
 
@@ -30,7 +32,7 @@ async def get_current_user(
         )
 
     # Ищем пользователя по public_id из токена
-    user = await crud.get_user_by_public_id(db, token_data.public_id)
+    user = await accounts.get_principal(db, token_data.public_id)
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
@@ -47,9 +49,9 @@ async def get_current_active_user(current_user=Depends(get_current_user)):
 
 
 async def get_current_admin_user(
-    current_user: models.User = Depends(get_current_active_user)
+    current_user: UserResponse = Depends(get_current_active_user)
 ):
-    if current_user.role != models.UserRole.ADMIN:
+    if current_user.role != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Недостаточно прав доступа"

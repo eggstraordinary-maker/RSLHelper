@@ -25,3 +25,7 @@ class InvalidRangeError(MediaError):
     def __init__(self, size: int):
         self.size = size
         super().__init__("Requested byte range is not satisfiable")
+
+
+class AmbiguousLessonError(ValueError):
+    """A legacy label cannot identify a unique published lesson."""
