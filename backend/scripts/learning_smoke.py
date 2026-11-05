@@ -7,6 +7,7 @@ script's explicitly tagged temporary rows and objects, never existing lessons.
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import json
+import os
 from pathlib import Path
 import secrets
 import uuid
@@ -21,7 +22,7 @@ from app.database import engine
 from app.services.storage import storage
 
 
-def create_fixture(video_path: Path) -> dict:
+def create_fixture(video_path: Path, *, password: str | None = None) -> dict:
     for _ in range(40):
         try:
             httpx.get("http://localhost:8000/health", timeout=2).raise_for_status()
@@ -34,7 +35,7 @@ def create_fixture(video_path: Path) -> dict:
         )
     run_id = uuid.uuid4().hex
     email = f"e2e_{run_id}@example.com"
-    password = secrets.token_urlsafe(24) + "aA1"
+    password = password or secrets.token_urlsafe(24) + "aA1"
     with Session(engine) as db:
         user = models.User(
             email=email,
@@ -83,9 +84,10 @@ def create_fixture(video_path: Path) -> dict:
 
 def cleanup_fixture(fixture: dict) -> None:
     run_id = fixture["run_id"]
+    email = f"e2e_{run_id}@example.com"
     if (not isinstance(run_id, str) or len(run_id) != 32
             or any(char not in "0123456789abcdef" for char in run_id)
-            or fixture["email"] != f"e2e_{run_id}@example.com"
+            or fixture.get("email", email) != email
             or len(fixture["lesson_ids"]) != len(fixture["objects"])):
         raise ValueError("Refusing to clean up an untagged fixture")
     objects_to_delete = []
@@ -93,7 +95,7 @@ def cleanup_fixture(fixture: dict) -> None:
         user = db.scalar(
             select(models.User).where(
                 models.User.id == fixture["user_id"],
-                models.User.email == fixture["email"],
+                models.User.email == email,
             )
         )
         if user:
@@ -206,6 +208,11 @@ def smoke(fixture: dict) -> None:
     )
 
 
+def public_fixture(fixture: dict) -> dict:
+    """Only noncredential identifiers needed for browser selection and cleanup."""
+    return {key: fixture[key] for key in ("run_id", "user_id", "lesson_ids", "objects")}
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--video", type=Path)
@@ -219,11 +226,18 @@ def main():
         return
     if not args.video:
         parser.error("--video is required")
-    fixture = create_fixture(args.video)
+    password = os.getenv("RSL_E2E_PASSWORD")
+    if args.keep_fixture and not password:
+        parser.error("RSL_E2E_PASSWORD is required; credentials must not be written to fixture files")
+    fixture = create_fixture(args.video, password=password)
     if args.keep_fixture:
-        args.keep_fixture.write_text(json.dumps(fixture), encoding="utf-8")
+        try:
+            args.keep_fixture.write_text(json.dumps(public_fixture(fixture)), encoding="utf-8")
+        except BaseException:
+            cleanup_fixture(fixture)
+            raise
         print(
-            "Temporary browser fixture created; credentials saved without console output"
+            "Temporary browser fixture created; manifest contains no credentials"
         )
         return
     try:

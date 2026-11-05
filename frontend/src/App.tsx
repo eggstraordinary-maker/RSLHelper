@@ -9,6 +9,7 @@ import { useAuth } from './contexts/AuthContext';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import LanguageSwitcher from './components/LanguageSwitcher';
+import { SessionStatus } from './features/auth';
 
 type Tab = 'dictionary' | 'translator' | 'learning' | 'admin';
 
@@ -220,18 +221,10 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
 
 // Обёртка App
 const App: React.FC = () => {
-  const { user, isGuest, isLoading } = useAuth();
+  const { user, isGuest, isLoading, sessionError, enterGuestMode } = useAuth();
   const [showLogin, setShowLogin] = useState(false);
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center">
-        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
-        <div className="mt-4 text-lg text-gray-600">Загрузка...</div>
-      </div>
-    );
-  }
-
+  if (isLoading || sessionError) return <SessionStatus />;
   // 1. Авторизованный пользователь
   if (user) {
     return <MainApp />;
@@ -258,7 +251,6 @@ const App: React.FC = () => {
               }}
               onGuestMode={() => {
                 // В гостевой режим из начальной страницы
-                const { enterGuestMode } = useAuth();
                 enterGuestMode();
                 setShowLogin(false);
               }}

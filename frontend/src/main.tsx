@@ -6,9 +6,17 @@ import Register from './pages/Register'
 import EmailVerification from './pages/EmailVerification'
 import PasswordResetPage from './pages/PasswordResetPage'
 import Profile from './pages/Profile';
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { RequireSession } from './features/auth';
 import './i18n/config';
 import './styles/index.css'
+
+function ExitGuest() {
+  const { exitGuestMode } = useAuth();
+  const navigate = useNavigate();
+  React.useEffect(() => { exitGuestMode(); navigate('/', { replace: true }); }, [exitGuestMode, navigate]);
+  return null;
+}
 
 function PasswordResetWrapper() {
   const { token: pathToken } = useParams<{ token: string }>();
@@ -39,16 +47,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/verify-email" element={<EmailVerification />} />
           <Route path="/reset-password" element={<PasswordResetWrapper />} />
           <Route path="/reset-password/:token" element={<PasswordResetWrapper />} />
-          <Route path="/exit-guest" element={
-            <div style={{ display: 'none' }}>
-              {(() => {
-                localStorage.removeItem('guest_mode');
-                // window.location.href = '/';
-                return null;
-              })()}
-            </div>
-          } />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/exit-guest" element={<ExitGuest />} />
+          <Route path="/profile" element={<RequireSession><Profile /></RequireSession>} />
         </Routes>
       </AuthProvider>
     </Router>

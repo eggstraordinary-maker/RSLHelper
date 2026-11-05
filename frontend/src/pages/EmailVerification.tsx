@@ -1,66 +1,36 @@
-import React, { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { authApi } from "../services/api";
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import axios from 'axios';
+import { authApi } from '../services/api';
+import { AccountFeedback, ResendVerification, actionClass } from '../features/auth';
 
-const EmailVerification: React.FC = () => {
+export default function EmailVerification() {
+  const { t } = useTranslation('auth');
   const { token: pathToken } = useParams<{ token: string }>();
-  const [fragmentToken] = useState(() => window.location.hash.slice(1));
-  const token = pathToken ?? fragmentToken;
-  const navigate = useNavigate();
-  const [message, setMessage] = useState("Проверка ссылки подтверждения…");
-  const [isError, setIsError] = useState(false);
-  const verificationStarted = useRef(false);
-
+  const [fragment] = useState(() => window.location.hash.slice(1));
+  const token = pathToken ?? fragment;
+  const [revision, setRevision] = useState(0);
+  const [state, setState] = useState('verifying');
+  const flight = useRef<{ token: string; promise: Promise<unknown> }>();
   useEffect(() => {
-    if (fragmentToken) {
-      window.history.replaceState(null, "", window.location.pathname + window.location.search);
-    }
-  }, [fragmentToken]);
-
+    if (fragment) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, [fragment]);
   useEffect(() => {
-    if (verificationStarted.current) return;
-    verificationStarted.current = true;
-
-    const verifyEmail = async () => {
-      if (!token) {
-        setMessage("Ссылка для подтверждения недействительна или устарела.");
-        setIsError(true);
-        return;
-      }
-
-      try {
-        await authApi.verifyEmail(token);
-        setMessage("Email подтверждён. Теперь можно войти в систему.");
-        setIsError(false);
-        window.setTimeout(() => navigate("/"), 3000);
-      } catch {
-        setMessage("Ссылка для подтверждения недействительна или устарела.");
-        setIsError(true);
-      }
-    };
-
-    void verifyEmail();
-  }, [token, navigate]);
-
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <div className="max-w-md w-full p-6 bg-white rounded-lg shadow-lg">
-        <h2 className="text-2xl font-semibold mb-4">Подтверждение email</h2>
-        <div
-          role="status"
-          className={`p-3 rounded ${isError ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}
-        >
-          {message}
-        </div>
-        <button
-          onClick={() => navigate("/")}
-          className="mt-4 w-full py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
-        >
-          На главную
-        </button>
-      </div>
-    </div>
-  );
-};
-
-export default EmailVerification;
+    let active = true;
+    if (!token) { setState('invalidLink'); return; }
+    setState('verifying');
+    if (!flight.current || flight.current.token !== token) flight.current = { token, promise: authApi.verifyEmail(token) };
+    flight.current.promise.then(() => { if (active) setState('verifySuccess'); }, error => {
+      if (active) setState(axios.isAxiosError(error) && error.response?.status === 400 ? 'invalidLink' : 'networkError');
+    });
+    return () => { active = false; };
+  }, [token, revision]);
+  return <main className="max-w-md mx-auto p-6 space-y-4 bg-white rounded-lg shadow mt-8">
+    <h1 className="text-2xl font-semibold">{t('verifyTitle')}</h1>
+    <AccountFeedback message={state} failed={state === 'invalidLink' || state === 'networkError'} />
+    {state === 'networkError' && <button className={actionClass} onClick={() => { flight.current = undefined; setRevision(value => value + 1); }}>{t('retry')}</button>}
+    {state === 'invalidLink' && <ResendVerification />}
+    <Link className="block text-indigo-700" to="/">{t('home')}</Link>
+  </main>;
+}

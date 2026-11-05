@@ -80,3 +80,38 @@ def test_cleanup_does_not_delete_s3_when_sql_commit_fails(scoped_fixture, monkey
         assert db.get(models.User, fixture["user_id"]) is not None
         assert db.scalar(select(models.VideoFile)) is not None
     assert storage.deleted == []
+
+
+def test_public_manifest_has_no_credentials_and_still_cleans_only_owned_rows(scoped_fixture):
+    fixture, engine, storage = scoped_fixture
+    fixture["password"] = "not-a-real-password"
+    manifest = learning_smoke.public_fixture(fixture)
+    assert set(manifest) == {"run_id", "user_id", "lesson_ids", "objects"}
+    learning_smoke.cleanup_fixture(manifest)
+    with Session(engine) as db:
+        assert db.get(models.User, fixture["user_id"]) is None
+    assert storage.deleted == fixture["objects"]
+
+
+def test_keep_fixture_requires_an_environment_credential_before_creating_data(tmp_path, monkeypatch):
+    monkeypatch.delenv("RSL_E2E_PASSWORD", raising=False)
+    monkeypatch.setattr("sys.argv", ["smoke", "--video", "unused.mp4", "--keep-fixture", str(tmp_path / "manifest.json")])
+    def forbidden(*_, **__):
+        pytest.fail("Must validate credentials before creating any account")
+    monkeypatch.setattr(learning_smoke, "create_fixture", forbidden)
+    with pytest.raises(SystemExit) as stopped:
+        learning_smoke.main()
+    assert stopped.value.code == 2
+    assert not (tmp_path / "manifest.json").exists()
+
+
+def test_manifest_write_failure_cleans_created_data(scoped_fixture, tmp_path, monkeypatch):
+    fixture, engine, storage = scoped_fixture
+    monkeypatch.setenv("RSL_E2E_PASSWORD", "NotARealPassword8")
+    monkeypatch.setattr("sys.argv", ["smoke", "--video", "unused.mp4", "--keep-fixture", str(tmp_path)])
+    monkeypatch.setattr(learning_smoke, "create_fixture", lambda *_, **__: fixture)
+    with pytest.raises(IsADirectoryError):
+        learning_smoke.main()
+    with Session(engine) as db:
+        assert db.get(models.User, fixture["user_id"]) is None
+    assert storage.deleted == fixture["objects"]

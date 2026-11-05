@@ -3,14 +3,16 @@ import { resolve } from 'node:path';
 import { test, expect } from '@playwright/test';
 
 const fixture = JSON.parse(readFileSync(resolve('../.local-test-artifacts/e2e-fixture.json'), 'utf8')) as {
-  run_id: string; email: string; password: string;
+  run_id: string;
 };
+const password = process.env.RSL_E2E_PASSWORD;
+if (!password) throw new Error('RSL_E2E_PASSWORD is required for browser login');
 
 test('real login, duplicate titles, video/S3, practice, completion, reload and camera lifecycle', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Войти', exact: true }).first().click();
-  await page.getByLabel('Email').fill(fixture.email);
-  await page.getByLabel('Пароль', { exact: true }).fill(fixture.password);
+  await page.getByLabel('Email', { exact: true }).fill(`e2e_${fixture.run_id}@example.com`);
+  await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
   await page.getByRole('button', { name: 'Обучение', exact: true }).click();
   await page.getByRole('button', { name: `E2E practice ${fixture.run_id}`, exact: true }).nth(1).click();
