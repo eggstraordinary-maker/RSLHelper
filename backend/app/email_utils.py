@@ -1,5 +1,6 @@
 import smtplib
 import logging
+import ssl
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from jinja2 import Template
@@ -19,9 +20,16 @@ def send_email(to_email: str, subject: str, body_html: str) -> bool:
 
         msg.attach(MIMEText(body_html, "html"))
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port) as server:
-            server.starttls()
-            server.login(settings.smtp_user, settings.smtp_password)
+        context = ssl.create_default_context()
+        smtp_class = smtplib.SMTP_SSL if settings.smtp_security == "ssl" else smtplib.SMTP
+        options = {"timeout": settings.smtp_timeout_seconds}
+        if settings.smtp_security == "ssl":
+            options["context"] = context
+        with smtp_class(settings.smtp_host, settings.smtp_port, **options) as server:
+            if settings.smtp_security == "starttls":
+                server.starttls(context=context)
+            if settings.smtp_auth:
+                server.login(settings.smtp_user, settings.smtp_password)
             server.send_message(msg)
 
         return True

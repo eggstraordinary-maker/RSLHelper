@@ -43,13 +43,11 @@ async def _send_email_safely(sender, *args) -> bool:
     return bool(delivered)
 
 
-@router.post("/register", response_model=UserResponse)
+@router.post("/register", response_model=UserResponse, summary="Создать аккаунт и отправить подтверждение",
+             responses={503: {"description": "Аккаунт создан, доставка не завершена; повторите /auth/resend-verification"}})
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_db)):
     try:
-        user = await crud.create_user(db, user_data)
-        _verification, verification_token = await crud.create_email_verification(
-            db, user.email
-        )
+        user, verification_token = await accounts.register_account(db, user_data)
         verification_url = (
             f"{settings.frontend_url}/verify-email#{verification_token}"
         )
@@ -58,7 +56,8 @@ async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_d
         ):
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Email delivery is temporarily unavailable; retry verification later",
+                detail={"code": "verification_delivery_unavailable", "account_created": True,
+                        "message": "Account created; retry /auth/resend-verification"},
             )
         return user
     except ValueError as exc:
@@ -97,7 +96,8 @@ async def verify_email_from_body(
     return {"message": "Email verified successfully"}
 
 
-@router.post("/resend-verification")
+@router.post("/resend-verification", summary="Повторно отправить подтверждение",
+             responses={503: {"description": "Доставка временно недоступна; запрос можно повторить"}})
 async def resend_verification(
     request: EmailVerificationRequest,
     db: AsyncSession = Depends(get_async_db),

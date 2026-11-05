@@ -102,7 +102,7 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - run: python -m pip install -r backend/requirements-dev.txt
       - name: PostgreSQL migration and account lifecycle regression checks
-        run: python -m pytest backend/tests/test_migrations.py backend/tests/test_accounts_postgresql.py -q
+        run: python -m pytest backend/tests/test_migrations.py backend/tests/test_accounts_postgresql.py backend/tests/test_mail_postgresql.py -q
 
   media-integration:
     runs-on: ubuntu-24.04
@@ -113,6 +113,16 @@ jobs:
       - name: Clean isolated test resources
         if: always()
         run: docker compose -p rslhelper-media-ci -f docker-compose.test.yml --profile test down --volumes
+
+  mail-integration:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - name: Verify SMTP delivery and account recovery on isolated PostgreSQL
+        run: docker compose -p rslhelper-mail-ci -f docker-compose.test.yml --profile test run --build --rm backend-mail-tests
+      - name: Clean isolated mail test resources
+        if: always()
+        run: docker compose -p rslhelper-mail-ci -f docker-compose.test.yml --profile test down --volumes
 
   frontend:
     runs-on: ubuntu-24.04

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,9 +19,12 @@ class Settings(BaseSettings):
     # Email
     smtp_host: str
     smtp_port: int
-    smtp_user: str
-    smtp_password: str
+    smtp_user: str = ""
+    smtp_password: str = ""
     email_from: str
+    smtp_security: Literal["starttls", "ssl", "plain"] = "starttls"
+    smtp_auth: bool = True
+    smtp_timeout_seconds: float = Field(default=10.0, gt=0, le=120)
 
     # Frontend
     frontend_url: str = "http://localhost:5173"

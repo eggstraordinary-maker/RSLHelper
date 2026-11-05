@@ -28,19 +28,40 @@ def _integrity_error(exc: IntegrityError):
     return AccountConflictError(field) if field else AccountPersistenceError("Account operation could not be saved")
 
 
+async def _insert_user(db: AsyncSession, data: schemas.UserCreate):
+    if await repo.user_by_email(db, data.email):
+        raise AccountConflictError("email")
+    if await repo.user_by_username(db, data.username):
+        raise AccountConflictError("username")
+    hashed = await run_in_threadpool(auth.get_password_hash, data.password)
+    user = models.User(email=data.email, username=data.username, hashed_password=hashed)
+    db.add(user)
+    await db.flush()  # DB uniqueness remains authoritative when prechecks race.
+    return user
+
+
 async def create_user(db: AsyncSession, data: schemas.UserCreate):
     try:
-        if await repo.user_by_email(db, data.email):
-            raise AccountConflictError("email")
-        if await repo.user_by_username(db, data.username):
-            raise AccountConflictError("username")
-        hashed_password = await run_in_threadpool(auth.get_password_hash, data.password)
-        user = models.User(email=data.email, username=data.username, hashed_password=hashed_password)
-        db.add(user)
-        await db.flush()  # DB uniqueness is authoritative even when prechecks race.
+        user = await _insert_user(db, data)
         await db.commit()
         await db.refresh(user)
         return user
+    except IntegrityError as exc:
+        await db.rollback()
+        raise _integrity_error(exc) from None
+    except BaseException:
+        await db.rollback()
+        raise
+
+
+async def register_account(db: AsyncSession, data: schemas.UserCreate):
+    """Persist the account and its first verification credential atomically."""
+    try:
+        user = await _insert_user(db, data)
+        _, token = await repo.replace_verification(db, user.email)
+        response = schemas.UserResponse.model_validate(user)
+        await db.commit()
+        return response, token
     except IntegrityError as exc:
         await db.rollback()
         raise _integrity_error(exc) from None
