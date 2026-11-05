@@ -1,1 +1,17 @@
-[]
+{
+  "title": "Sign dictionary",
+  "contents": "Contents",
+  "loadingCatalog": "Loading signs…",
+  "catalogError": "Could not load the sign list. Please try again.",
+  "emptyCatalog": "There are no videos in the dictionary yet",
+  "retryCatalog": "Retry sign list",
+  "refreshCatalog": "Refresh sign list",
+  "mediaSection": "Selected sign video",
+  "loadingVideo": "Loading video…",
+  "videoError": "Could not load the video. Check your connection and try again.",
+  "retryVideo": "Retry video",
+  "videoLabel": "Reference sign",
+  "selectedSign": "Selected sign",
+  "descriptionTitle": "Sign description",
+  "noDescription": "A description is not available for this sign yet. Refer to the video."
+}

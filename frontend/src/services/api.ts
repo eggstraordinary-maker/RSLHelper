@@ -113,8 +113,8 @@ export const recognitionApi = {
 };
 
 export const videosApi = {
-  async list(): Promise<VideoInfo[]> {
-    const { data } = await publicApiClient.get<VideoInfo[]>('/videos/lessons');
+  async list(signal?: AbortSignal): Promise<VideoInfo[]> {
+    const { data } = await publicApiClient.get<VideoInfo[]>('/videos/lessons', { signal });
     return data;
   },
 
