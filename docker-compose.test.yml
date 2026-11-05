@@ -50,7 +50,7 @@ services:
     depends_on:
       postgres-tests:
         condition: service_healthy
-    command: python -m pytest tests/test_migrations.py tests/test_accounts_postgresql.py -q
+    command: python -m pytest tests/test_migrations.py tests/test_accounts_postgresql.py tests/test_mail_postgresql.py -q
     profiles: [test]
 
   seaweedfs-tests:
@@ -92,10 +92,11 @@ services:
       DATABASE_URL: postgresql://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
       DATABASE_URL_ASYNC: postgresql+asyncpg://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
       SECRET_KEY: ci-only-browser-test-not-a-production-secret-64-byte-placeholder-value
-      SMTP_HOST: localhost
-      SMTP_PORT: "25"
-      SMTP_USER: ci
-      SMTP_PASSWORD: ci
+      SMTP_HOST: mailpit-tests
+      SMTP_PORT: "1025"
+      SMTP_SECURITY: plain
+      SMTP_AUTH: "false"
+      SMTP_TIMEOUT_SECONDS: "2"
       EMAIL_FROM: ci@example.com
       FRONTEND_URL: http://localhost:5173
       S3_ENDPOINT_URL: http://seaweedfs-tests:8333
@@ -110,6 +111,8 @@ services:
         condition: service_healthy
       seaweedfs-tests:
         condition: service_healthy
+      mailpit-tests:
+        condition: service_started
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 2s
@@ -126,6 +129,31 @@ services:
       e2e-backend:
         condition: service_healthy
     profiles: [e2e]
+
+  mailpit-tests:
+    image: axllent/mailpit:v1.33.0
+    ports: ["127.0.0.1:18025:8025"]
+    profiles: [test, e2e]
+
+  backend-mail-tests:
+    build:
+      context: ./backend
+      target: tests
+    environment:
+      MAIL_INTEGRATION_TESTS: "1"
+      POSTGRES_TEST_URL: postgresql://ci:ci-postgres-password@postgres-tests:5432/rslhelper_ci
+      SMTP_HOST: mailpit-tests
+      SMTP_PORT: "1025"
+      SMTP_SECURITY: plain
+      SMTP_AUTH: "false"
+      SMTP_TIMEOUT_SECONDS: "2"
+    depends_on:
+      postgres-tests:
+        condition: service_healthy
+      mailpit-tests:
+        condition: service_started
+    command: python -m pytest tests/test_mail_integration.py -q
+    profiles: [test]
 
   e2e-console:
     image: chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d

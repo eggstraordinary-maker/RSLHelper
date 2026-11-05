@@ -3,11 +3,11 @@
 from .service import (
     change_password, create_user, create_verification, delete_account,
     issue_password_reset, login, reset_password, rotate_refresh, update_profile,
-    verify_email,
+    verify_email, register_account,
 )
 
 __all__ = [
     "change_password", "create_user", "create_verification", "delete_account",
     "issue_password_reset", "login", "reset_password", "rotate_refresh",
-    "update_profile", "verify_email",
+    "update_profile", "verify_email", "register_account",
 ]
