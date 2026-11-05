@@ -15,6 +15,12 @@ test('real login, duplicate titles, video/S3, practice, completion, reload and c
   await page.getByRole('button', { name: 'Обучение', exact: true }).click();
   await page.getByRole('button', { name: `E2E practice ${fixture.run_id}`, exact: true }).nth(1).click();
   const video = page.getByLabel('Эталонный жест');
+  await expect(video).toHaveAttribute('src', /\/videos\/lessons\/[0-9a-f-]+\/content$/);
+  await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
+  const mediaResponse = await page.request.get((await video.getAttribute('src'))!, { headers: { Range: 'bytes=0-15' } });
+  expect(mediaResponse.status()).toBe(206);
+  expect((await mediaResponse.body()).byteLength).toBe(16);
+  await video.evaluate((element: HTMLVideoElement) => { element.currentTime = Math.min(0.1, element.duration / 2); });
   await expect.poll(() => video.evaluate((element: HTMLVideoElement) => element.readyState)).toBeGreaterThanOrEqual(2);
   await expect(page.getByText('Камера выключена.', { exact: true })).toBeVisible();
   await expect(page.getByText('Автоматическое распознавание сейчас недоступно.', { exact: true })).toBeVisible();

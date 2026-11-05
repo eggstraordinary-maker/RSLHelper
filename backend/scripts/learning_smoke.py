@@ -83,8 +83,12 @@ def create_fixture(video_path: Path) -> dict:
 
 def cleanup_fixture(fixture: dict) -> None:
     run_id = fixture["run_id"]
-    if fixture["email"] != f"e2e_{run_id}@example.com":
+    if (not isinstance(run_id, str) or len(run_id) != 32
+            or any(char not in "0123456789abcdef" for char in run_id)
+            or fixture["email"] != f"e2e_{run_id}@example.com"
+            or len(fixture["lesson_ids"]) != len(fixture["objects"])):
         raise ValueError("Refusing to clean up an untagged fixture")
+    objects_to_delete = []
     with Session(engine) as db:
         user = db.scalar(
             select(models.User).where(
@@ -108,10 +112,9 @@ def cleanup_fixture(fixture: dict) -> None:
                     models.RefreshToken.user_id == user.id
                 )
             )
+            db.execute(delete(models.EmailVerification).where(models.EmailVerification.email == user.email))
             db.delete(user)
         for lesson_id, object_name in zip(fixture["lesson_ids"], fixture["objects"]):
-            if f"e2e-{run_id}-" not in object_name:
-                raise ValueError("Refusing to delete an untagged object")
             video = db.scalar(
                 select(models.VideoFile).where(
                     models.VideoFile.lesson_id == lesson_id,
@@ -119,9 +122,19 @@ def cleanup_fixture(fixture: dict) -> None:
                 )
             )
             if video:
+                # Keys are now opaque UUIDs. The server-side record, not its
+                # key's spelling, proves that this clip belongs to this run.
+                if (not video.filename.startswith(f"e2e-{run_id}-")
+                        or video.description != f"E2E practice {run_id}"):
+                    raise ValueError("Refusing to delete an untagged lesson")
                 db.delete(video)
-            storage.delete_object(object_name)
+                objects_to_delete.append(object_name)
+            elif storage.object_exists(object_name):
+                raise ValueError("Missing tagged lesson: explicitly review orphan-object cleanup")
         db.commit()
+    # A failed SQL commit must not remove a still-referenced object.
+    for object_name in objects_to_delete:
+        storage.delete_object(object_name)
 
 
 def smoke(fixture: dict) -> None:
@@ -156,10 +169,16 @@ def smoke(fixture: dict) -> None:
         )
         assert client.put(f"/progress/lessons/{lesson}/completion").status_code == 401
         assert client.get("/recognition/status").json()["available"] is False
-        for object_name in fixture["objects"]:
-            body = client.get(f"/videos/stream/{object_name}")
+        catalog = client.get("/videos/lessons").json()
+        assert all("object_name" not in record for record in catalog)
+        for lesson_id, object_name in zip(fixture["lesson_ids"], fixture["objects"]):
+            content_url = f"/videos/lessons/{lesson_id}/content"
+            body = client.get(content_url)
             body.raise_for_status()
             assert len(body.content) > 0
+            part = client.get(content_url, headers={"Range": "bytes=0-15"})
+            assert part.status_code == 206 and part.content == body.content[:16]
+            assert client.get(content_url, headers={"Range": f"bytes={len(body.content)}-"}).status_code == 416
             stored = storage.get_object(object_name)
             try:
                 assert stored.read() == body.content

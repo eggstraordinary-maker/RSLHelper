@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 
 from app.routers import auth, users, language, videos, progress, admin, recognition
 from app.middleware.language_middleware import LanguageMiddleware
+from app.middleware.upload_body_limit import UploadBodyLimitMiddleware
 
 class CustomCORSMiddleware(CORSMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -43,6 +44,7 @@ async def sanitized_validation_error_handler(
     ]
     return JSONResponse(status_code=422, content={"detail": safe_errors})
 
+app.add_middleware(UploadBodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8000", "http://frontend:5173"],

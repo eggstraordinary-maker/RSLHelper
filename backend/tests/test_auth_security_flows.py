@@ -250,9 +250,10 @@ def test_admin_and_video_upload_routes_enforce_roles(api, monkeypatch):
     assert client.get("/admin/users", headers=user_headers).status_code == 403
     assert client.get("/admin/users", headers=admin_headers).status_code == 200
 
-    monkeypatch.setattr("app.routers.videos.storage.put_object", lambda *args, **kwargs: None)
+    from media_fixture import tiny_mp4_bytes
+    monkeypatch.setattr("app.modules.catalog.service.storage.put_object", lambda *args, **kwargs: None)
     upload_data = {
-        "file": ("lesson.mp4", b"video bytes", "video/mp4"),
+        "file": ("lesson.mp4", tiny_mp4_bytes(), "video/mp4"),
         "description": (None, "Lesson"),
     }
     assert client.post("/videos/upload", files=upload_data).status_code == 401
@@ -354,7 +355,9 @@ def test_video_storage_errors_are_sanitized_and_progress_is_user_scoped(
     def fail_to_read(_object_name):
         raise RuntimeError(sensitive_storage_error)
 
-    monkeypatch.setattr("app.routers.videos.storage.get_object", fail_to_read)
+    from app.services.storage import ObjectMetadata
+    monkeypatch.setattr("app.modules.catalog.service.storage.stat_object", lambda _name: ObjectMetadata(10, "video/mp4"))
+    monkeypatch.setattr("app.modules.catalog.service.storage.get_object", lambda name, _range=None: fail_to_read(name))
     caplog.clear()
     video_error = client.get("/videos/stream/lesson-object")
     assert video_error.status_code == 404

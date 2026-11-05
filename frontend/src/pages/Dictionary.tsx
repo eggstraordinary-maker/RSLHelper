@@ -8,7 +8,7 @@ export default function Dictionary() {
   const [loadingList, setLoadingList] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
 
-  const [selectedObjectName, setSelectedObjectName] = useState<string | null>(null);
+  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
   const [selectedDescription, setSelectedDescription] = useState<string>('');
   const [selectedLessonId, setSelectedLessonId] = useState<string>('');
 
@@ -25,7 +25,7 @@ export default function Dictionary() {
         setVideos(data);
         
         if (data.length > 0) {
-          setSelectedObjectName(data[0].object_name);
+          setSelectedMediaUrl(data[0].media_url);
           setSelectedDescription(data[0].description || data[0].filename);
           setSelectedLessonId(data[0].lesson_id);
         }
@@ -39,17 +39,17 @@ export default function Dictionary() {
   }, []);
 
   useEffect(() => {
-  if (!selectedObjectName) return;
+  if (!selectedMediaUrl) return;
 
   setLoadingVideo(true);
   setVideoError(null);
-  setVideoUrl(videosApi.streamUrl(selectedObjectName));
-  }, [selectedObjectName]);
+  setVideoUrl(videosApi.streamUrl(selectedMediaUrl));
+  }, [selectedMediaUrl]);
 
   const handleSelect = (lessonId: string) => {
     const video = videos.find(v => v.lesson_id === lessonId);
     if (video) {
-      setSelectedObjectName(video.object_name);
+      setSelectedMediaUrl(video.media_url);
       setSelectedDescription(video.description || video.filename);
       setSelectedLessonId(video.lesson_id);
     }
@@ -84,6 +84,7 @@ export default function Dictionary() {
 
         {videoUrl && (
           <video
+            aria-label="Эталонный жест"
             key={videoUrl}
             src={videoUrl}
             controls
@@ -97,7 +98,7 @@ export default function Dictionary() {
           />
         )}
 
-        {!loadingVideo && !videoError && !videoUrl && selectedObjectName && (
+        {!loadingVideo && !videoError && !videoUrl && selectedMediaUrl && (
           <div className="bg-gray-100 w-full h-64 flex items-center justify-center rounded-lg">
             <p className="text-gray-500">Видео не загружено</p>
           </div>

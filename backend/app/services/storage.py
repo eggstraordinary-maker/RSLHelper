@@ -1,4 +1,5 @@
 from datetime import timedelta
+from dataclasses import dataclass
 from threading import Lock
 from typing import Any, BinaryIO, Protocol
 
@@ -15,6 +16,12 @@ class StoredObject(Protocol):
     def close(self) -> None: ...
 
 
+@dataclass(frozen=True)
+class ObjectMetadata:
+    size: int
+    content_type: str
+
+
 class ObjectStorage(Protocol):
     """Object operations used by the media module."""
 
@@ -28,7 +35,9 @@ class ObjectStorage(Protocol):
 
     def presigned_get_object(self, object_name: str, expires: timedelta) -> str: ...
 
-    def get_object(self, object_name: str) -> StoredObject: ...
+    def stat_object(self, object_name: str) -> ObjectMetadata: ...
+
+    def get_object(self, object_name: str, byte_range: str | None = None) -> StoredObject: ...
 
     def object_exists(self, object_name: str) -> bool: ...
 
@@ -138,8 +147,18 @@ class S3Storage:
             ExpiresIn=int(expires.total_seconds()),
         )
 
-    def get_object(self, object_name: str) -> StoredObject:
-        response = self.client.get_object(Bucket=self._bucket, Key=object_name)
+    def stat_object(self, object_name: str) -> ObjectMetadata:
+        response = self.client.head_object(Bucket=self._bucket, Key=object_name)
+        return ObjectMetadata(
+            size=int(response["ContentLength"]),
+            content_type=response.get("ContentType", "application/octet-stream"),
+        )
+
+    def get_object(self, object_name: str, byte_range: str | None = None) -> StoredObject:
+        arguments = {"Bucket": self._bucket, "Key": object_name}
+        if byte_range is not None:
+            arguments["Range"] = byte_range
+        response = self.client.get_object(**arguments)
         return response["Body"]
 
     def object_exists(self, object_name: str) -> bool:

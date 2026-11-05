@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,6 +27,11 @@ class Settings(BaseSettings):
     # App
     debug: bool = False
     recognition_endpoint_url: str | None = None
+
+    # MP4 upload validation. Request overhead includes multipart headers/fields.
+    media_max_upload_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+    media_max_request_overhead_bytes: int = Field(default=1024 * 1024, gt=0)
+    media_probe_timeout_seconds: float = Field(default=10.0, gt=0)
 
     # S3-compatible object storage (SeaweedFS in Docker Compose)
     s3_endpoint_url: str
