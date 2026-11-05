@@ -102,10 +102,10 @@ const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) 
             </div>
             <div className="text-lg font-semibold">{t('app_title')}</div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-wrap items-center gap-3">
             <LanguageSwitcher />
             {isGuest ? (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
                   {t('guest_mode')}
                 </span>

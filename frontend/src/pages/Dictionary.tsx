@@ -1,131 +1,54 @@
-import React, { useState, useEffect } from 'react';
+import React, { useId } from 'react';
+import { useTranslation } from 'react-i18next';
 import LeftTOC from '../components/LeftTOC';
+import { LessonMedia, useDictionaryCatalog } from '../features/catalog';
 import { videosApi } from '../services/api';
 import type { VideoInfo } from '../types/api';
 
+const lessonLabel = (lesson: VideoInfo) => lesson.description?.trim().replace(/\s+/g, ' ') || lesson.filename;
+
 export default function Dictionary() {
-  const [videos, setVideos] = useState<VideoInfo[]>([]);
-  const [loadingList, setLoadingList] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
+  const { t } = useTranslation('dictionary');
+  const { videos, status, selectedId, reload, selectLesson } = useDictionaryCatalog();
+  const selected = videos.find(video => video.lesson_id === selectedId);
+  const selectedLabelId = useId();
 
-  const [selectedMediaUrl, setSelectedMediaUrl] = useState<string | null>(null);
-  const [selectedDescription, setSelectedDescription] = useState<string>('');
-  const [selectedLessonId, setSelectedLessonId] = useState<string>('');
-
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [loadingVideo, setLoadingVideo] = useState(false);
-  const [videoError, setVideoError] = useState<string | null>(null);
-  
-  useEffect(() => {
-    const fetchVideos = async () => {
-      setLoadingList(true);
-      setListError(null);
-      try {
-        const data = await videosApi.list();
-        setVideos(data);
-        
-        if (data.length > 0) {
-          setSelectedMediaUrl(data[0].media_url);
-          setSelectedDescription(data[0].description || data[0].filename);
-          setSelectedLessonId(data[0].lesson_id);
-        }
-      } catch (err) {
-        setListError('Не удалось загрузить список видео');
-      } finally {
-        setLoadingList(false);
-      }
-    };
-    fetchVideos();
-  }, []);
-
-  useEffect(() => {
-  if (!selectedMediaUrl) return;
-
-  setLoadingVideo(true);
-  setVideoError(null);
-  setVideoUrl(videosApi.streamUrl(selectedMediaUrl));
-  }, [selectedMediaUrl]);
-
-  const handleSelect = (lessonId: string) => {
-    const video = videos.find(v => v.lesson_id === lessonId);
-    if (video) {
-      setSelectedMediaUrl(video.media_url);
-      setSelectedDescription(video.description || video.filename);
-      setSelectedLessonId(video.lesson_id);
-    }
-  };
-
-  const tocItems = videos.map(v => ({ id: v.lesson_id, label: v.description || v.filename }));
-
-  if (loadingList) {
-    return <div className="text-center py-8">Загрузка списка жестов...</div>;
-  }
-
-  if (listError) {
-    return <div className="bg-red-50 text-red-700 p-4 rounded-lg">{listError}</div>;
-  }
-
-  if (videos.length === 0) {
-    return <div className="text-center py-8 text-gray-500">В словаре пока нет видео</div>;
-  }
-
-   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[auto_1fr] gap-4 lg:gap-6">
-      <LeftTOC items={tocItems} active={selectedLessonId} onSelect={handleSelect} />
-
-      <div className="space-y-4">
-        {loadingVideo && <div className="text-center py-8 text-gray-500">Загрузка видео...</div>}
-
-        {videoError && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
-            {videoError}
-          </div>
-        )}
-
-        {videoUrl && (
-          <video
-            aria-label="Эталонный жест"
-            key={videoUrl}
-            src={videoUrl}
-            controls
-            className="w-full rounded-lg shadow-md"
-            autoPlay={false}
-            onLoadedData={() => setLoadingVideo(false)}
-            onError={() => {
-              setLoadingVideo(false);
-              setVideoError('Не удалось загрузить видео');
-            }}
-          />
-        )}
-
-        {!loadingVideo && !videoError && !videoUrl && selectedMediaUrl && (
-          <div className="bg-gray-100 w-full h-64 flex items-center justify-center rounded-lg">
-            <p className="text-gray-500">Видео не загружено</p>
-          </div>
-        )}
-
-        <div>
-          <label className="block text-sm font-medium mb-1">Выбранный жест</label>
-          <input
-            value={selectedDescription}
-            readOnly
-            className="w-full rounded-md border px-3 py-2 bg-gray-100 cursor-not-allowed"
-          />
-        </div>
-
-        <div className="bg-white border rounded-lg p-4">
-          <h4 className="font-semibold mb-2">Описание и советы по повторению жеста</h4>
-          <p className="text-sm text-gray-600">
-            Здесь будет текстовое описание выбранного жеста: положение рук, направление движений,
-            темп и советы по запоминанию и повторению. (Заглушка)
-          </p>
-          <ul className="mt-3 text-sm text-gray-600 list-disc list-inside">
-            <li>Разбейте жест на этапы и тренируйте по частям.</li>
-            <li>Записывайте себя на видео и сравнивайте с эталоном.</li>
-            <li>Тренируйтесь в медленном темпе, затем увеличивайте скорость.</li>
-          </ul>
-        </div>
+  return (
+    <div className="space-y-4 min-w-0">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold">{t('title')}</h1>
+        <button type="button" disabled={status === 'loading'} onClick={reload}
+          className="px-4 py-2 border rounded-md bg-white disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-indigo-600">
+          {t(status === 'error' ? 'retryCatalog' : 'refreshCatalog')}
+        </button>
       </div>
+      {status === 'loading' && <p role="status" className="text-gray-600">{t('loadingCatalog')}</p>}
+      {status === 'error' && (
+        <div role="alert" className="bg-red-50 text-red-700 p-4 rounded-lg">{t('catalogError')}</div>
+      )}
+      {status === 'ready' && videos.length === 0 && (
+        <p role="status" className="py-8 text-center text-gray-600">{t('emptyCatalog')}</p>
+      )}
+      {selected && (
+        <div className="grid grid-cols-1 xl:grid-cols-[auto_minmax(0,1fr)] gap-4 lg:gap-6">
+          <LeftTOC title={t('contents')} items={videos.map(video => ({ id: video.lesson_id, label: lessonLabel(video) }))}
+            active={selected.lesson_id} onSelect={selectLesson} />
+          <div className="space-y-4 min-w-0">
+            <LessonMedia key={`${selected.lesson_id}:${selected.media_url}`} src={videosApi.streamUrl(selected.media_url)} />
+            <div>
+              <label htmlFor={selectedLabelId} className="block text-sm font-medium mb-1">{t('selectedSign')}</label>
+              <input id={selectedLabelId} value={lessonLabel(selected)} readOnly
+                className="w-full rounded-md border px-3 py-2 bg-gray-100" />
+            </div>
+            <section aria-label={t('descriptionTitle')} className="bg-white border rounded-lg p-4">
+              <h2 className="font-semibold mb-2">{t('descriptionTitle')}</h2>
+              <p className="text-sm text-gray-600 whitespace-pre-line [overflow-wrap:anywhere]">
+                {selected.description?.trim() || t('noDescription')}
+              </p>
+            </section>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
