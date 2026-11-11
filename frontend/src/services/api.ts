@@ -95,9 +95,10 @@ export const progressApi = {
     return data;
   },
 
-  async practice(lessonId: string): Promise<UserProgress> {
+  async practice(lessonId: string, attemptId: string): Promise<UserProgress> {
     const { data } = await apiClient.post<UserProgress>(
-      `/progress/lessons/${encodeURIComponent(lessonId)}/attempts`, { completed: false },
+      `/progress/lessons/${encodeURIComponent(lessonId)}/attempts`,
+      { completed: false, attempt_id: attemptId },
     );
     return data;
   },
