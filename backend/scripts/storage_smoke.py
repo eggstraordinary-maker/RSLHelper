@@ -48,7 +48,7 @@ def main() -> None:
         url = storage.presigned_get_object(object_name, timedelta(minutes=5))
         assert object_name in url
         print(f"SeaweedFS Put/Get/Presign OK: {object_name}")
-        print(json.dumps({"object_name": object_name, "url": url}))
+        print(json.dumps({"object_name": object_name, "presign": "verified"}))
     finally:
         if uploaded and not args.keep:
             storage.delete_object(object_name)

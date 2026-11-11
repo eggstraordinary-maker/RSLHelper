@@ -73,9 +73,10 @@ def test_module_services_do_not_depend_on_http_or_other_module_internals():
 
 def test_repositories_do_not_own_transaction_commits():
     for name in MODULES:
-        for node in ast.walk(syntax(APP / "modules" / name / "repository.py")):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                assert node.func.attr not in {"commit", "rollback"}
+        for path in (APP / "modules" / name).glob("*repository.py"):
+            for node in ast.walk(syntax(path)):
+                if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+                    assert node.func.attr not in {"commit", "rollback"}
 
 
 def test_compatibility_shims_are_retired_from_runtime():
