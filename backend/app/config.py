@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     recognition_endpoint_url: str | None = None
 
     # MP4 upload validation. Request overhead includes multipart headers/fields.
-    media_max_upload_bytes: int = Field(default=50 * 1024 * 1024, gt=0)
+    # DR-01 uses decimal MB: 100 MB = 100,000,000 bytes. Deployments may tighten it.
+    media_max_upload_bytes: int = Field(default=100_000_000, gt=0, le=100_000_000)
+    media_max_duration_seconds: float = Field(default=15.0, gt=0, le=15.0)
     media_max_request_overhead_bytes: int = Field(default=1024 * 1024, gt=0)
     media_probe_timeout_seconds: float = Field(default=10.0, gt=0)
 

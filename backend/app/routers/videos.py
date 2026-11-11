@@ -42,7 +42,7 @@ def _legacy_response(lesson) -> VideoResponse:
 @router.post(
     "/upload", response_model=VideoResponse, deprecated=True,
     summary="Загрузить проверенный MP4 урока",
-    description="Только администратор. Legacy-ответ содержит внутренний ключ; публичный каталог использует lesson_id.",
+    description="Только администратор. MP4 с H.264: до 100 МБ (100 000 000 байт) и 15 секунд; настройки развёртывания могут уменьшить лимиты. Legacy-ответ содержит внутренний ключ; публичный каталог использует lesson_id.",
     responses={413: {"description": "Превышен лимит размера"}, 415: {"description": "Недопустимый MP4"}, 503: {"description": "Хранилище или проверка временно недоступны"}},
 )
 async def upload_video(
