@@ -23,6 +23,7 @@ if ($ComposeFile) { $taskCompose += @('-f', $ComposeFile) }
 if ($Profile) { $taskCompose += @('--profile', $Profile) }
 $taskPreviousPassword = $env:RSL_E2E_PASSWORD
 $taskPreviousMailpitUrl = $env:RSL_E2E_MAILPIT_URL
+$taskPreviousBrowsers = $env:PLAYWRIGHT_BROWSERS_PATH
 $taskCreated = $false
 Set-Location -LiteralPath $taskRepo
 New-Item -ItemType Directory -Path $taskArtifacts -Force | Out-Null
@@ -35,7 +36,7 @@ try {
     docker @taskCompose exec -T -e RSL_E2E_PASSWORD $BackendService python -m scripts.learning_smoke --video /tmp/e2e-video.mp4 --keep-fixture /tmp/e2e-fixture.json
     if ($LASTEXITCODE -ne 0) { throw 'Could not create E2E fixture' }
     $taskCreated = $true
-    docker @taskCompose exec -T $BackendService python -c "import json; from pathlib import Path; data=json.loads(Path('/tmp/e2e-fixture.json').read_text()); assert set(data)=={'run_id','user_id','lesson_ids','objects'}, 'Refusing a credential-bearing E2E manifest; rebuild backend first'"
+    docker @taskCompose exec -T $BackendService python -m scripts.learning_smoke --validate-fixture /tmp/e2e-fixture.json
     if ($LASTEXITCODE -ne 0) { throw 'E2E manifest must contain only noncredential identifiers' }
     docker @taskCompose cp "${BackendService}:/tmp/e2e-fixture.json" $taskFixture
     if ($LASTEXITCODE -ne 0) { throw 'Could not read noncredential E2E manifest' }
@@ -43,7 +44,7 @@ try {
     if ($taskPublic.PSObject.Properties.Name -contains 'password' -or $taskPublic.PSObject.Properties.Name -contains 'email') {
         throw 'Refusing a credential-bearing E2E manifest; rebuild backend first'
     }
-    $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $taskArtifacts 'browsers'
+    if (-not $env:PLAYWRIGHT_BROWSERS_PATH) { $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path $taskArtifacts 'browsers' }
     Set-Location -LiteralPath (Join-Path $taskRepo 'frontend')
     npx playwright test @TestFiles
     if ($LASTEXITCODE -ne 0) { throw 'Browser E2E failed' }
@@ -51,6 +52,7 @@ try {
     Set-Location -LiteralPath $taskRepo
     $env:RSL_E2E_PASSWORD = $taskPreviousPassword
     $env:RSL_E2E_MAILPIT_URL = $taskPreviousMailpitUrl
+    $env:PLAYWRIGHT_BROWSERS_PATH = $taskPreviousBrowsers
     if ($taskCreated) {
         docker @taskCompose exec -T $BackendService python -m scripts.learning_smoke --cleanup /tmp/e2e-fixture.json
         if ($LASTEXITCODE -ne 0) { throw 'Temporary fixture cleanup failed; retry the cleanup command from README.' }

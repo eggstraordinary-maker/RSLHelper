@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './safeTest';
 
 const api = 'http://localhost:8000';
 const inbox = process.env.RSL_E2E_MAILPIT_URL ?? 'http://localhost:18025';

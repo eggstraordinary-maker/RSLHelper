@@ -46,10 +46,15 @@ def scoped_fixture(tmp_path, monkeypatch):
 
 def test_cleanup_accepts_opaque_key_only_for_its_tagged_database_record(scoped_fixture):
     fixture, engine, storage = scoped_fixture
+    with Session(engine) as db:
+        db.add(models.LearningAttemptReceipt(user_id=fixture["user_id"], attempt_id=str(uuid4()),
+            lesson_id=fixture["lesson_ids"][0], completed=False, response_payload={}))
+        db.commit()
     learning_smoke.cleanup_fixture(fixture)
     with Session(engine) as db:
         assert db.scalar(select(models.User)) is None
         assert db.scalar(select(models.VideoFile)) is None
+        assert db.scalar(select(models.LearningAttemptReceipt)) is None
     assert storage.deleted == fixture["objects"]
 
 
@@ -91,6 +96,16 @@ def test_public_manifest_has_no_credentials_and_still_cleans_only_owned_rows(sco
     with Session(engine) as db:
         assert db.get(models.User, fixture["user_id"]) is None
     assert storage.deleted == fixture["objects"]
+
+
+def test_manifest_validator_rejects_any_extra_field(tmp_path, monkeypatch):
+    import json
+    path = tmp_path / "manifest.json"
+    path.write_text(json.dumps({"run_id": "test", "user_id": 1, "lesson_ids": [], "objects": [],
+                                "password": "private-canary"}), encoding="utf8")
+    monkeypatch.setattr("sys.argv", ["smoke", "--validate-fixture", str(path)])
+    with pytest.raises(ValueError, match="credential-bearing"):
+        learning_smoke.main()
 
 
 def test_keep_fixture_requires_an_environment_credential_before_creating_data(tmp_path, monkeypatch):
