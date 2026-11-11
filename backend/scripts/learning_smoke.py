@@ -99,6 +99,8 @@ def cleanup_fixture(fixture: dict) -> None:
             )
         )
         if user:
+            db.execute(delete(models.LearningAttemptReceipt).where(
+                models.LearningAttemptReceipt.user_id == user.id))
             db.execute(
                 delete(models.UserLearningProgress).where(
                     models.UserLearningProgress.user_id == user.id
@@ -218,7 +220,14 @@ def main():
     parser.add_argument("--video", type=Path)
     parser.add_argument("--keep-fixture", type=Path)
     parser.add_argument("--cleanup", type=Path)
+    parser.add_argument("--validate-fixture", type=Path)
     args = parser.parse_args()
+    if args.validate_fixture:
+        manifest = json.loads(args.validate_fixture.read_text(encoding="utf-8-sig"))
+        if set(manifest) != {"run_id", "user_id", "lesson_ids", "objects"}:
+            raise ValueError("Refusing a credential-bearing manifest")
+        print("Noncredential manifest validated")
+        return
     if args.cleanup:
         cleanup_fixture(json.loads(args.cleanup.read_text(encoding="utf-8-sig")))
         args.cleanup.unlink()
@@ -247,4 +256,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        # SQL/HTTP exception objects can contain parameters and credentials.
+        raise SystemExit("Learning check failed; private details suppressed") from None

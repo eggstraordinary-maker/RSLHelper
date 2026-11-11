@@ -148,3 +148,49 @@ jobs:
           path: .local-test-artifacts/coverage/frontend
           include-hidden-files: true
           if-no-files-found: warn
+
+  browser-e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.local-test-artifacts/browsers
+      PLAYWRIGHT_CONSOLE_USER: ciadmin
+      PLAYWRIGHT_CONSOLE_PASSWORD: ci-console-test-password
+      PLAYWRIGHT_NO_COPY_PROMPT: '1'
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install browser dependencies
+        working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Check failure artifact privacy
+        working-directory: frontend
+        run: node scripts/check-e2e-privacy.mjs
+      - name: Start isolated browser stack
+        run: docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e up -d --build --wait
+      - name: Prepare a synthetic H264 clip
+        run: |
+          mkdir -p .local-test-artifacts
+          docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e exec -T e2e-backend ffmpeg -v error -y -f lavfi -i color=c=blue:s=160x90:d=1.2 -c:v libx264 -pix_fmt yuv420p /tmp/browser-fixture.mp4
+          docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e cp e2e-backend:/tmp/browser-fixture.mp4 .local-test-artifacts/browser-fixture.mp4
+      - name: Browser journeys with scoped fixture cleanup
+        shell: pwsh
+        run: |
+          ./scripts/run_e2e.ps1 -VideoPath ./.local-test-artifacts/browser-fixture.mp4 -ComposeProject rslhelper-browser-ci -ComposeFile docker-compose.test.yml -Profile e2e -BackendService e2e-backend -MailpitUrl http://localhost:18025
+      - name: Remove isolated resources
+        if: always()
+        run: docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e down --volumes
+      - name: Publish noncredential test summary
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: browser-e2e-summary
+          path: .local-test-artifacts/browser-e2e-summary.json
+          include-hidden-files: true
+          if-no-files-found: warn

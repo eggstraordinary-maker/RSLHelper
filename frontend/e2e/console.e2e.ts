@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { test, expect } from '@playwright/test';
+import { test, expect } from './safeTest';
 
 test('SeaweedFS console requires login and lists the S3 bucket', async ({ page }) => {
   const env = process.env.PLAYWRIGHT_CONSOLE_USER && process.env.PLAYWRIGHT_CONSOLE_PASSWORD
