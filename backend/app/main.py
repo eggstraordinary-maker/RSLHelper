@@ -7,6 +7,10 @@ from fastapi.responses import JSONResponse
 from app.routers import auth, users, language, videos, progress, admin, recognition
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.upload_body_limit import UploadBodyLimitMiddleware
+from app.config import settings
+from app.privacy import install_log_filters, RequestCorrelationMiddleware
+
+install_log_filters()
 
 class CustomCORSMiddleware(CORSMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -47,13 +51,15 @@ async def sanitized_validation_error_handler(
 app.add_middleware(UploadBodyLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8000", "http://frontend:5173"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "Retry-After"],
 )
 
 app.add_middleware(LanguageMiddleware)
+app.add_middleware(RequestCorrelationMiddleware)
 
 # Настройка CORS
 # app.add_middleware(

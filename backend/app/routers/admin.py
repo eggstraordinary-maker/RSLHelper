@@ -4,6 +4,7 @@ from app.database import get_async_db
 from app.dependencies import get_current_admin_user
 from app import schemas
 from app.modules.accounts import public as accounts
+from app.privacy import audit
 from app.modules.accounts.errors import AccountNotFoundError, AccountPermissionError, SelfDeletionError
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -30,6 +31,7 @@ async def delete_user(
     """Удалить пользователя по ID (только для администратора)."""
     try:
         await accounts.delete_account(db, user_id, admin_id=current_admin.id)
+        audit("admin.user_deleted", actor_id=current_admin.id, target_id=user_id)
     except AccountNotFoundError:
         raise HTTPException(status_code=404, detail="Пользователь не найден") from None
     except SelfDeletionError:

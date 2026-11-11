@@ -1,4 +1,5 @@
 import os
+os.environ.setdefault("AUTH_RATE_LIMITS_ENABLED", "false")  # Rate-limit regressions explicitly enable the real gate.
 
 # Keep imports deterministic and independent of developer secrets or services.
 os.environ.setdefault("DATABASE_URL", "sqlite:///./rslhelper-tests.db")

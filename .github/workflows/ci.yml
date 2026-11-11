@@ -102,7 +102,7 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - run: python -m pip install -r backend/requirements-dev.txt
       - name: PostgreSQL migration, account and learning regression checks
-        run: python -m pytest backend/tests/test_migrations.py backend/tests/test_accounts_postgresql.py backend/tests/test_mail_postgresql.py backend/tests/test_learning_postgresql.py -q
+        run: python -m pytest backend/tests/test_migrations.py backend/tests/test_accounts_postgresql.py backend/tests/test_mail_postgresql.py backend/tests/test_learning_postgresql.py backend/tests/test_rate_limits_postgresql.py -q
 
   media-integration:
     runs-on: ubuntu-24.04

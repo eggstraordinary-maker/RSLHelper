@@ -7,6 +7,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app import email_utils
 from app.config import settings
+from app.privacy import audit
 from app.database import get_async_db
 from app.dependencies import get_current_active_user
 from app.schemas import (
@@ -30,6 +31,19 @@ router = APIRouter(prefix="/auth", tags=["authentication"])
 logger = logging.getLogger(__name__)
 
 
+async def _admit(db, scope, address, *, hide_limit=False):
+    try:
+        await accounts.admit(db, scope, address)
+        return True
+    except accounts.RateLimitExceeded as exc:
+        if hide_limit:
+            return False
+        raise HTTPException(status_code=429, detail={"code": "auth_rate_limited", "message": "Too many requests; retry later"},
+            headers={"Retry-After": str(exc.retry_after)}) from None
+    except accounts.AdmissionUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "auth_admission_unavailable", "message": "Authentication is temporarily unavailable"}) from None
+
+
 async def _send_email_safely(sender, *args) -> bool:
     try:
         delivered = await run_in_threadpool(sender, *args)
@@ -45,8 +59,10 @@ async def _send_email_safely(sender, *args) -> bool:
 @router.post("/register", response_model=UserResponse, summary="Создать аккаунт и отправить подтверждение",
              responses={503: {"description": "Аккаунт создан, доставка не завершена; повторите /auth/resend-verification"}})
 async def register(user_data: UserCreate, db: AsyncSession = Depends(get_async_db)):
+    await _admit(db, "mail", user_data.email)
     try:
         user, verification_token = await accounts.register_account(db, user_data)
+        audit("account.registered", actor_id=user.id)
         verification_url = (
             f"{settings.frontend_url}/verify-email#{verification_token}"
         )
@@ -68,9 +84,13 @@ async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_async_db),
 ):
+    await _admit(db, "login", form_data.username)
     try:
-        return await accounts.login(db, form_data.username, form_data.password)
+        result = await accounts.login(db, form_data.username, form_data.password)
+        audit("login.succeeded")
+        return result
     except InvalidCredentialsError:
+        audit("login.rejected")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -101,6 +121,7 @@ async def resend_verification(
     request: EmailVerificationRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
+    await _admit(db, "mail", request.email)
     try:
         verification_token = await accounts.create_verification(db, request.email)
     except AccountNotFoundError:
@@ -123,6 +144,8 @@ async def forgot_password(
     request: PasswordResetRequest,
     db: AsyncSession = Depends(get_async_db),
 ):
+    if not await _admit(db, "mail", request.email, hide_limit=True):
+        return {"message": "If email exists, reset instructions sent"}
     issued = await accounts.issue_password_reset(db, request.email)
     if issued:
         email, reset_token = issued

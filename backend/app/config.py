@@ -1,6 +1,7 @@
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
+from urllib.parse import urlsplit
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +16,11 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
+    auth_rate_limits_enabled: bool = True
+    auth_login_limit: int = Field(default=10, ge=1, le=1000)
+    auth_login_window_seconds: int = Field(default=60, ge=1, le=86400)
+    auth_mail_limit: int = Field(default=3, ge=1, le=1000)
+    auth_mail_window_seconds: int = Field(default=900, ge=1, le=86400)
 
     # Email
     smtp_host: str
@@ -28,6 +34,19 @@ class Settings(BaseSettings):
 
     # Frontend
     frontend_url: str = "http://localhost:5173"
+    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000", "http://localhost:8000", "http://frontend:5173"]
+
+    @field_validator("cors_origins")
+    @classmethod
+    def validate_origins(cls, values: list[str]) -> list[str]:
+        for value in values:
+            parsed = urlsplit(value)
+            _ = parsed.port
+            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                    or parsed.username or parsed.password or parsed.query or parsed.fragment
+                    or parsed.path not in {"", "/"}):
+                raise ValueError("CORS origins must be explicit HTTP(S) origins")
+        return list(dict.fromkeys(value.rstrip("/") for value in values))
 
     # App
     debug: bool = False

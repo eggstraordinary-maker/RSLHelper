@@ -144,3 +144,12 @@ class LearningAttemptReceipt(Base):
     # result and progress in the same transaction before acknowledging success.
     response_payload = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class AuthRateBucket(Base):
+    """Short-lived admission timestamps keyed by a pseudonymous address digest."""
+    __tablename__ = "auth_rate_buckets"
+    scope = Column(String(16), primary_key=True)
+    key_digest = Column(String(64), primary_key=True)
+    admissions = Column(JSON, nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
