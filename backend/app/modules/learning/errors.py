@@ -4,3 +4,7 @@ class LessonNotFoundError(ValueError):
 
 class AmbiguousLessonError(ValueError):
     pass
+
+
+class AttemptConflictError(ValueError):
+    pass

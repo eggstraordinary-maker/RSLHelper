@@ -3,11 +3,17 @@ import LeftTOC from '../components/LeftTOC';
 import CameraView from '../components/CameraView';
 import { useAuth } from '../contexts/AuthContext';
 import { progressApi, videosApi } from '../services/api';
-import { getApiErrorMessage } from '../services/apiClient';
+import { getApiErrorMessage, getSessionRevision } from '../services/apiClient';
+import { acknowledgePracticeAttempt, beginPracticeAttempt } from '../features/learning';
 import type { UserProgress, VideoInfo } from '../types/api';
 
 export default function Learning() {
-  const { completeLesson } = useAuth();
+  const { user } = useAuth();
+  return <LearningSession key={user?.public_id ?? 'no-principal'} />;
+}
+
+function LearningSession() {
+  const { completeLesson, user } = useAuth();
   const [videos, setVideos] = useState<VideoInfo[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [loading, setLoading] = useState(true);
@@ -65,22 +71,37 @@ export default function Learning() {
   }, [selectedId, videoRetry]);
 
   const savePractice = async (complete: boolean) => {
-    if (!selected || saveInFlight.current || progressLoading || progressError) return;
+    if (!selected || !user || saveInFlight.current || progressLoading || progressError) return;
     const lessonId = selected.lesson_id;
+    const principal = user.public_id;
+    const sessionRevision = getSessionRevision();
     saveInFlight.current = true;
     setSaving(true);
     setNotice(null);
     try {
-      const saved = complete ? await completeLesson(lessonId) : await progressApi.practice(lessonId);
-      if (mounted.current) {
-        setProgress(previous => ({ ...previous, [lessonId]: saved }));
+      const attemptId = complete ? undefined : beginPracticeAttempt(principal, lessonId);
+      const saved = complete ? await completeLesson(lessonId) : await progressApi.practice(lessonId, attemptId!);
+      if (attemptId) acknowledgePracticeAttempt(principal, lessonId, attemptId);
+      if (mounted.current && getSessionRevision() === sessionRevision) {
+        // A replay is the original snapshot. Never lower a more recent local
+        // count/completion if another acknowledged action already updated it.
+        setProgress(previous => {
+          const current = previous[lessonId];
+          return { ...previous, [lessonId]: { ...saved,
+            attempts: Math.max(current?.attempts ?? 0, saved.attempts),
+            completed: !!current?.completed || saved.completed,
+            completed_at: current?.completed_at ?? saved.completed_at,
+          } };
+        });
         setNotice({ lessonId, error: false, text: complete ? 'Урок отмечен пройденным.' : 'Самостоятельная практика сохранена.' });
       }
     } catch (error) {
-      if (mounted.current) setNotice({ lessonId, error: true, text: getApiErrorMessage(error, 'Не удалось сохранить прогресс. Повторите попытку.') });
+      if (mounted.current && getSessionRevision() === sessionRevision) {
+        setNotice({ lessonId, error: true, text: getApiErrorMessage(error, 'Не удалось сохранить прогресс. Повторите попытку.') });
+      }
     } finally {
       saveInFlight.current = false;
-      if (mounted.current) setSaving(false);
+      if (mounted.current && getSessionRevision() === sessionRevision) setSaving(false);
     }
   };
 

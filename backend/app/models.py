@@ -4,7 +4,7 @@ from hashlib import sha256
 import secrets
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint, true
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint, JSON, true
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -129,3 +129,18 @@ class LegacyProgressMapping(Base):
     completed = Column(Boolean, nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
     attempts = Column(Integer, nullable=True)
+
+
+class LearningAttemptReceipt(Base):
+    """A committed request ID and its original result, owned by one user."""
+
+    __tablename__ = "learning_attempt_receipts"
+
+    user_id = Column(Integer, ForeignKey("users.id"), primary_key=True)
+    attempt_id = Column(String(36), primary_key=True)
+    lesson_id = Column(String(36), ForeignKey("video_files.lesson_id"), nullable=False)
+    completed = Column(Boolean, nullable=False)
+    # NULL exists only during the uncommitted claim. The use case writes the
+    # result and progress in the same transaction before acknowledging success.
+    response_payload = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -41,7 +41,7 @@ async def unresolved_progress(
     return await learning.list_legacy(db, current_user.id)
 
 
-async def _record(db, user_id, lesson_id, *, practice, completed, legacy_label=None):
+async def _record(db, user_id, lesson_id, *, practice, completed, legacy_label=None, attempt_id=None):
     try:
         return await learning.record_progress(
             db,
@@ -50,6 +50,7 @@ async def _record(db, user_id, lesson_id, *, practice, completed, legacy_label=N
             practice=practice,
             completed=completed,
             legacy_label=legacy_label,
+            attempt_id=attempt_id,
         )
     except learning.LessonNotFoundError:
         raise HTTPException(status_code=404, detail="Lesson not found") from None
@@ -57,9 +58,21 @@ async def _record(db, user_id, lesson_id, *, practice, completed, legacy_label=N
         raise HTTPException(
             status_code=409, detail="Ambiguous lesson; use lesson_id"
         ) from None
+    except learning.AttemptConflictError:
+        raise HTTPException(status_code=409, detail={
+            "code": "attempt_id_conflict",
+            "message": "Attempt ID already identifies a different practice request",
+        }) from None
 
 
-@router.post("/lessons/{lesson_id}/attempts", response_model=UserProgress)
+@router.post(
+    "/lessons/{lesson_id}/attempts", response_model=UserProgress,
+    summary="Сохранить самостоятельную попытку",
+    description="Доступно владельцу прогресса для опубликованного урока. "
+    "Повтор attempt_id с теми же lesson_id/completed возвращает исходный результат, "
+    "если текущий доступ к уроку сохранён. Без attempt_id каждый вызов — новая попытка.",
+    responses={409: {"description": "ID попытки уже использован с другими данными"}},
+)
 async def practice_lesson(
     lesson_id: UUID,
     attempt: PracticeAttempt,
@@ -67,7 +80,8 @@ async def practice_lesson(
     db: AsyncSession = Depends(get_async_db),
 ):
     return await _record(
-        db, current_user.id, str(lesson_id), practice=True, completed=attempt.completed
+        db, current_user.id, str(lesson_id), practice=True, completed=attempt.completed,
+        attempt_id=str(attempt.attempt_id) if attempt.attempt_id is not None else None,
     )
 
 

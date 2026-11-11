@@ -11,6 +11,7 @@ from alembic import command
 from alembic.config import Config
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, MetaData, Table, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
@@ -79,14 +80,39 @@ def test_fresh_database_bootstraps_all_application_tables(migration_url: str) ->
             assert compare_metadata(context, Base.metadata) == []
     finally:
         engine.dispose()
-    assert {
-        "users",
-        "email_verifications",
-        "refresh_tokens",
-        "video_files",
-        "user_progress",
-    } <= tables
+
+    assert {"users", "email_verifications", "refresh_tokens", "video_files", "user_progress"} <= tables
     assert "alembic_version" in tables
+
+
+def test_attempt_receipts_prevent_lossy_downgrade(migration_url):
+    _upgrade(migration_url)
+    engine = create_engine(migration_url)
+    try:
+        with Session(engine) as db:
+            user = models.User(email="receipt@example.test", username="receipt", hashed_password="fixture")
+            video = models.VideoFile(filename="receipt.mp4", object_name="receipt.mp4")
+            db.add_all([user, video])
+            db.flush()
+            db.add(models.LearningAttemptReceipt(user_id=user.id, attempt_id=str(uuid4()),
+                lesson_id=video.lesson_id, completed=False, response_payload={"attempts": 1}))
+            db.commit()
+        config = Config(str(ALEMBIC_INI))
+        config.set_main_option("sqlalchemy.url", migration_url.replace("%", "%%"))
+        previous_url = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = migration_url
+        try:
+            with pytest.raises(RuntimeError, match="Cannot remove practice attempt receipts"):
+                command.downgrade(config, "0005_username_uniqueness")
+        finally:
+            if previous_url is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous_url
+        with engine.connect() as connection:
+            assert connection.scalar(select(models.LearningAttemptReceipt.response_payload)) == {"attempts": 1}
+    finally:
+        engine.dispose()
 
 
 def test_legacy_database_is_adopted_without_losing_rows(migration_url: str) -> None:
@@ -354,7 +380,7 @@ def test_data_migration_downgrade_requires_a_backup_and_preserves_data(migration
         with engine.connect() as connection:
             assert connection.scalar(select(models.User.email)) == "rollback@example.test"
             if engine.dialect.name == "postgresql":
-                assert connection.scalar(text("SELECT version_num FROM alembic_version")) == "0005_username_uniqueness"
+                assert connection.scalar(text("SELECT version_num FROM alembic_version")) == ScriptDirectory.from_config(config).get_current_head()
                 assert compare_metadata(MigrationContext.configure(connection), Base.metadata) == []
     finally:
         engine.dispose()

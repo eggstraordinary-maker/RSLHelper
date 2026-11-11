@@ -1,4 +1,5 @@
-from datetime import datetime
+from datetime import datetime, timezone
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
@@ -126,10 +127,25 @@ class UserProgress(UserProgressBase):
     completed_at: datetime | None
     lesson_id: str
 
+    @field_validator("completed_at")
+    @classmethod
+    def completed_at_in_utc(cls, value: datetime | None) -> datetime | None:
+        # Legacy writers used datetime.utcnow(); SQLite also drops timezone
+        # metadata. Preserve the instant explicitly instead of emitting naive ISO.
+        if value is None:
+            return None
+        return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
 
 class PracticeAttempt(BaseModel):
     model_config = ConfigDict(extra="forbid")
     completed: bool = False
+    attempt_id: UUID | None = Field(
+        default=None,
+        description="Client-generated UUID reused until this practice is acknowledged. "
+        "The same user/ID/payload returns the original result; a different payload gives 409. "
+        "Without an ID each call remains a new practice for legacy clients.",
+    )
 
 
 class LegacyProgress(BaseModel):
@@ -140,6 +156,11 @@ class LegacyProgress(BaseModel):
     completed: bool | None
     attempts: int | None
     completed_at: datetime | None
+
+    @field_validator("completed_at")
+    @classmethod
+    def completed_at_in_utc(cls, value: datetime | None) -> datetime | None:
+        return UserProgress.completed_at_in_utc(value)
 
 class ProgressStats(BaseModel):
     total_lessons: int

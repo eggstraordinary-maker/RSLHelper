@@ -7,7 +7,7 @@ import { progressApi, videosApi } from '../services/api';
 import type { UserProgress, VideoInfo } from '../types/api';
 
 vi.mock('../components/CameraView', () => ({ default: () => <div>Camera test boundary</div> }));
-vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ completeLesson: progressApi.complete }) }));
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: { public_id: 'learner-test' }, completeLesson: progressApi.complete }) }));
 vi.mock('../services/api', () => ({
   videosApi: { list: vi.fn(), streamUrl: (mediaPath: string) => mediaPath },
   progressApi: { list: vi.fn(), practice: vi.fn(), complete: vi.fn() },
@@ -41,6 +41,22 @@ describe('self practice', () => {
   });
   afterEach(cleanup);
 
+  it('reuses an unacknowledged request after an error and creates a new ID only after success', async () => {
+    vi.mocked(progressApi.practice).mockRejectedValueOnce(new Error('response lost'));
+    render(<Learning />);
+    await waitFor(() => expect(repeat().disabled).toBe(false));
+    fireEvent.click(repeat());
+    await practice().findByRole('alert');
+    const first = vi.mocked(progressApi.practice).mock.calls[0][1];
+    fireEvent.click(repeat());
+    await screen.findByText('Самостоятельная практика сохранена.');
+    expect(vi.mocked(progressApi.practice).mock.calls[1][1]).toBe(first);
+    await waitFor(() => expect(repeat().disabled).toBe(false));
+    fireEvent.click(repeat());
+    await waitFor(() => expect(progressApi.practice).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(progressApi.practice).mock.calls[2][1]).not.toBe(first);
+  });
+
   it('selects duplicate titles by ID and records practice without a prediction', async () => {
     render(<Learning />);
     await waitFor(() => expect(repeat().disabled).toBe(false));
@@ -50,7 +66,7 @@ describe('self practice', () => {
     vi.mocked(progressApi.practice).mockResolvedValue(saved(lessons[1]));
     fireEvent.click(repeat());
     await screen.findByText('Самостоятельная практика сохранена.');
-    expect(progressApi.practice).toHaveBeenCalledWith(lessons[1].lesson_id);
+    expect(progressApi.practice).toHaveBeenCalledWith(lessons[1].lesson_id, expect.any(String));
     expect(progressApi.complete).not.toHaveBeenCalled();
     expect((screen.getByLabelText('Эталонный жест') as HTMLVideoElement).getAttribute('src')).toBe(lessons[1].media_url);
     expect(screen.getByText(/автоматическая оценка модели сейчас недоступна/)).toBeTruthy();
@@ -161,7 +177,8 @@ describe('self practice', () => {
       button.click();
     });
     expect(request).toHaveBeenCalledTimes(1);
-    expect(request).toHaveBeenCalledWith(lessons[0].lesson_id);
+    if (action === 'practice') expect(request).toHaveBeenCalledWith(lessons[0].lesson_id, expect.any(String));
+    else expect(request).toHaveBeenCalledWith(lessons[0].lesson_id);
     expect(repeat().disabled).toBe(true);
     expect(complete().disabled).toBe(true);
 
@@ -190,7 +207,7 @@ describe('self practice', () => {
     expect(practice().queryByText('Самостоятельная практика сохранена.')).toBeNull();
     expect(practice().queryByRole('alert')).toBeNull();
     expect(repeat().disabled).toBe(false);
-    expect(progressApi.practice).toHaveBeenCalledExactlyOnceWith(lessons[0].lesson_id);
+    expect(progressApi.practice).toHaveBeenCalledExactlyOnceWith(lessons[0].lesson_id, expect.any(String));
 
     fireEvent.click(screen.getAllByRole('button', { name: 'Same' })[0]);
     expect(practice().getByText(outcome === 'success' ? '3' : '2')).toBeTruthy();

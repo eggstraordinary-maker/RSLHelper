@@ -1,11 +1,11 @@
 from datetime import datetime
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import LegacyProgressMapping, UserLearningProgress, VideoFile
+from app.models import LearningAttemptReceipt, LegacyProgressMapping, UserLearningProgress, VideoFile
 
 
 def _published():
@@ -145,8 +145,38 @@ async def upsert_progress(
 
 async def delete_user_data(db: AsyncSession, user_id: int):
     await db.execute(
+        delete(LearningAttemptReceipt).where(LearningAttemptReceipt.user_id == user_id)
+    )
+    await db.execute(
         delete(UserLearningProgress).where(UserLearningProgress.user_id == user_id)
     )
     await db.execute(
         delete(LegacyProgressMapping).where(LegacyProgressMapping.user_id == user_id)
     )
+
+
+async def claim_attempt(db: AsyncSession, user_id: int, attempt_id: str, lesson_id: str, completed: bool) -> bool:
+    table = LearningAttemptReceipt.__table__
+    insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+    claimed = await db.scalar(
+        insert(table).values(user_id=user_id, attempt_id=attempt_id, lesson_id=lesson_id, completed=completed)
+        .on_conflict_do_nothing(index_elements=[table.c.user_id, table.c.attempt_id])
+        .returning(table.c.attempt_id)
+    )
+    return claimed is not None
+
+
+async def attempt_receipt(db: AsyncSession, user_id: int, attempt_id: str):
+    # This SELECT must be a separate statement after ON CONFLICT. Under
+    # PostgreSQL READ COMMITTED it sees the competing transaction's commit.
+    return await db.scalar(select(LearningAttemptReceipt).where(
+        LearningAttemptReceipt.user_id == user_id,
+        LearningAttemptReceipt.attempt_id == attempt_id,
+    ))
+
+
+async def finish_attempt(db: AsyncSession, user_id: int, attempt_id: str, response: dict) -> None:
+    await db.execute(update(LearningAttemptReceipt).where(
+        LearningAttemptReceipt.user_id == user_id,
+        LearningAttemptReceipt.attempt_id == attempt_id,
+    ).values(response_payload=response))
