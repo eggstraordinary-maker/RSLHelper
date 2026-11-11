@@ -14,6 +14,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:5173',
     headless: true,
+    channel: 'chromium',
     locale: 'ru-RU',
     launchOptions: { args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
     screenshot: 'off',

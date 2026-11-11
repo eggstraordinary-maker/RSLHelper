@@ -20,11 +20,12 @@ services:
     command: >
       sh -c "python -m compileall -q app scripts &&
       python -m ruff check --select E4,E7,E9,F --ignore F401 app tests alembic scripts &&
-      python -m pytest tests -q --cov=app --cov-branch --cov-report=term-missing"
+      python -m pytest tests -q --cov=app --cov-branch --cov-report=term-missing --cov-report=xml:/tmp/backend-coverage.xml &&
+      python scripts/check_coverage.py /tmp/backend-coverage.xml"
     profiles: [test]
   frontend-tests:
     build: ./frontend
-    command: sh -c "npm audit --audit-level=low && npm run typecheck && npm run test:coverage && npm run build"
+    command: sh -c "npm audit --audit-level=low && npm run lint && npm run check:boundaries && npm run typecheck && npm run typecheck:tools && npm run test:coverage && npm run build"
     profiles: [test]
 
   postgres-tests:
