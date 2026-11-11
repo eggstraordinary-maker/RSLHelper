@@ -8,5 +8,5 @@ export default defineConfig({
   reporter: [['./safeReporter.ts']],
   outputDir: '../../.local-test-artifacts/browser-privacy',
   preserveOutput: 'always',
-  use: { headless: true, screenshot: 'off', trace: 'off', video: 'off' },
+  use: { headless: true, channel: 'chromium', screenshot: 'off', trace: 'off', video: 'off' },
 });

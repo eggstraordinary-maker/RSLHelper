@@ -5,11 +5,11 @@ import { test as base, expect } from '@playwright/test';
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1';
 
 export const test = base.extend<{ _privateFailure: void }>({
-  _privateFailure: [async ({ context }, use, testInfo) => {
+  _privateFailure: [async ({ context }, runFixture, testInfo) => {
     // Depend on context so teardown runs before context/artifact teardown.
     void context;
     try {
-      await use();
+      await runFixture();
     } finally {
       // Preserve error count and failure status. No error payload is persisted.
       for (let index = 0; index < testInfo.errors.length; index += 1) {

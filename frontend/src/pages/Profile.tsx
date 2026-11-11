@@ -21,16 +21,16 @@ export default function Profile() {
   const [stats, setStats] = useState<{ owner: string; data: ProgressStats } | null>(null);
   const [progressState, setProgressState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [revision, setRevision] = useState(0);
+  const owner = user?.public_id;
   useEffect(() => {
     let active = true;
-    if (!user) return;
-    const owner = user.public_id;
+    if (!owner) return;
     setProgressState('loading');
     getProgressStats().then(data => {
       if (active) { setStats({ owner, data }); setProgressState('ready'); }
     }, () => { if (active) setProgressState('error'); });
     return () => { active = false; };
-  }, [user?.public_id, getProgressStats, revision]);
+  }, [owner, getProgressStats, revision]);
   const progress = stats?.owner === user?.public_id ? stats?.data : null;
   if (!user) return null;
   return <main className="max-w-2xl mx-auto p-4 space-y-6">
