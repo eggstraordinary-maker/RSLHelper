@@ -33,7 +33,10 @@ jobs:
           cache-dependency-path: backend/requirements*.txt
       - run: python -m pip install -r backend/requirements-dev.txt
       - run: python -m compileall -q backend/app backend/scripts scripts
+      - name: Prepare official Ubuntu package mirror
+        run: bash scripts/ci/prepare_ubuntu_apt.sh
       - name: Install MP4 validation tools
+        timeout-minutes: 6
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: python -m ruff check --select E4,E7,E9,F --ignore F401 backend/app backend/tests backend/alembic backend/scripts scripts
       - run: python -m pytest backend/tests -q --cov=backend/app --cov-branch --cov-report=term-missing --cov-report=xml:.local-test-artifacts/coverage/backend.xml
@@ -169,7 +172,10 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
+      - name: Prepare official Ubuntu package mirror
+        run: bash scripts/ci/prepare_ubuntu_apt.sh
       - name: Install browser dependencies
+        timeout-minutes: 8
         working-directory: frontend
         run: |
           npm ci
