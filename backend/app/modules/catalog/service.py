@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 import json
 import logging
 from pathlib import Path
@@ -98,24 +99,35 @@ def _probe_mp4(path: Path) -> None:
             [
                 "ffprobe", "-v", "error", "-protocol_whitelist", "file",
                 "-format_whitelist", "mov", "-enable_drefs", "0", "-use_absolute_path", "0",
-                "-select_streams", "v:0",
-                "-show_entries", "format=format_name:stream=codec_type,codec_name,width,height",
+                "-select_streams", "v",
+                "-show_entries", "format=format_name,duration:stream=codec_type,codec_name,width,height,duration",
                 "-of", "json", str(path),
             ],
             capture_output=True, text=True, check=True,
             timeout=settings.media_probe_timeout_seconds,
         )
         info = json.loads(result.stdout)
+        if not isinstance(info, dict) or not isinstance(info.get("format", {}), dict):
+            raise UnsupportedMediaError("Upload a valid MP4 video")
         streams = info.get("streams", [])
-        if not any(
-            stream.get("codec_type") == "video" and stream.get("codec_name")
+        if not isinstance(streams, list) or not streams or not all(
+            isinstance(stream, dict)
+            and stream.get("codec_type") == "video" and stream.get("codec_name") == "h264"
             and int(stream.get("width", 0)) > 0 and int(stream.get("height", 0)) > 0
             for stream in streams
         ):
-            raise UnsupportedMediaError("Upload an MP4 containing a video stream")
+            raise UnsupportedMediaError("Upload an MP4 containing H.264 video")
+        # A missing, non-finite or negative duration cannot prove the clip limit.
+        # Check both container and streams; a shorter stream must not hide a long file.
+        durations = [info.get("format", {}).get("duration")]
+        durations.extend(stream.get("duration") for stream in streams)
+        parsed = [Decimal(str(value)) for value in durations if value not in (None, "N/A")]
+        if (not parsed or any(not value.is_finite() or value <= 0 for value in parsed)
+                or max(parsed) > Decimal(str(settings.media_max_duration_seconds))):
+            raise UnsupportedMediaError("Upload an MP4 no longer than the configured duration limit")
     except FileNotFoundError:
         raise MediaUnavailableError("Media validation is temporarily unavailable") from None
-    except (subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError):
+    except (subprocess.SubprocessError, json.JSONDecodeError, TypeError, ValueError, InvalidOperation):
         raise UnsupportedMediaError("Upload a valid MP4 video") from None
 
 

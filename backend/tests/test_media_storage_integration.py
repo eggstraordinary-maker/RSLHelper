@@ -146,6 +146,8 @@ async def test_rejected_uploads_do_not_create_s3_objects_or_database_rows(real_m
     invalid_uploads = [
         ("image.png", b"\x89PNG\r\n\x1a\n", "image/png"),
         ("forged.mp4", b"not a real MP4 container", "video/mp4"),
+        ("long.mp4", tiny_mp4_bytes("15.2"), "video/mp4"),
+        ("wrong-codec.mp4", tiny_mp4_bytes("0.4", "mpeg4"), "video/mp4"),
     ]
     for filename, data, content_type in invalid_uploads:
         rejected = await client.post(
