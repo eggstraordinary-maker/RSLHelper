@@ -7,43 +7,15 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: .
-    env:
-      PYTHONPATH: backend
-      DATABASE_URL: sqlite:///./ci-tests.db
-      DATABASE_URL_ASYNC: sqlite+aiosqlite:///./ci-tests.db
-      SECRET_KEY: ci-only-secret-key-not-for-production-64-byte-placeholder-value
-      SMTP_HOST: localhost
-      SMTP_PORT: "25"
-      SMTP_USER: ci
-      SMTP_PASSWORD: ci
-      EMAIL_FROM: ci@example.com
-      S3_ENDPOINT_URL: http://localhost:8333
-      S3_PUBLIC_ENDPOINT_URL: http://localhost:8333
-      AWS_ACCESS_KEY_ID: ci
-      AWS_SECRET_ACCESS_KEY: ci
     steps:
       - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-python@v7.0.0
-        with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: backend/requirements*.txt
-      - run: python -m pip install -r backend/requirements-dev.txt
-      - run: python -m compileall -q backend/app backend/scripts scripts
-      - name: Prepare official Ubuntu package mirror
-        run: bash scripts/ci/prepare_ubuntu_apt.sh
-      - name: Install MP4 validation tools
-        timeout-minutes: 6
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: python -m ruff check --select E4,E7,E9,F --ignore F401 backend/app backend/tests backend/alembic backend/scripts scripts
-      - run: python -m pytest backend/tests -q --cov=backend/app --cov-branch --cov-report=term-missing --cov-report=xml:.local-test-artifacts/coverage/backend.xml
-        env:
-          COVERAGE_FILE: .local-test-artifacts/coverage/.coverage
-      - name: Enforce separate backend line and branch floors
-        run: python backend/scripts/check_coverage.py .local-test-artifacts/coverage/backend.xml
+      - name: Backend checks in the reproducible test image
+        run: |
+          mkdir -p .local-test-artifacts/coverage
+          docker compose -p rslhelper-backend-ci -f docker-compose.test.yml --profile test run --build --rm backend-tests
+      - name: Clean backend test resources
+        if: always()
+        run: docker compose -p rslhelper-backend-ci -f docker-compose.test.yml --profile test down --volumes
       - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
@@ -165,6 +137,7 @@ jobs:
       PLAYWRIGHT_CONSOLE_USER: ciadmin
       PLAYWRIGHT_CONSOLE_PASSWORD: ci-console-test-password
       PLAYWRIGHT_NO_COPY_PROMPT: '1'
+      PLAYWRIGHT_CI_IMAGE: mcr.microsoft.com/playwright:v1.65.0-noble
     steps:
       - uses: actions/checkout@v7.0.1
       - uses: actions/setup-node@v7.1.0
@@ -172,17 +145,18 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Prepare official Ubuntu package mirror
-        run: bash scripts/ci/prepare_ubuntu_apt.sh
-      - name: Install browser dependencies
+      - name: Install browser test image
         timeout-minutes: 8
         working-directory: frontend
         run: |
           npm ci
-          npx playwright install --with-deps chromium
+          docker pull "$PLAYWRIGHT_CI_IMAGE"
+      - name: Check runner failure propagation and cleanup
+        shell: pwsh
+        run: ./scripts/tests/run_e2e_runner.tests.ps1
       - name: Check failure artifact privacy
         working-directory: frontend
-        run: node scripts/check-e2e-privacy.mjs
+        run: docker run --rm --ipc=host --env CI --env PLAYWRIGHT_BROWSERS_PATH=/ms-playwright --volume "${{ github.workspace }}:/workspace" --workdir /workspace/frontend "$PLAYWRIGHT_CI_IMAGE" node scripts/check-e2e-privacy.mjs
       - name: Start isolated browser stack
         run: docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e up -d --build --wait
       - name: Prepare a synthetic H264 clip
@@ -193,7 +167,7 @@ jobs:
       - name: Browser journeys with scoped fixture cleanup
         shell: pwsh
         run: |
-          ./scripts/run_e2e.ps1 -VideoPath ./.local-test-artifacts/browser-fixture.mp4 -ComposeProject rslhelper-browser-ci -ComposeFile docker-compose.test.yml -Profile e2e -BackendService e2e-backend -MailpitUrl http://localhost:18025
+          ./scripts/run_e2e.ps1 -VideoPath ./.local-test-artifacts/browser-fixture.mp4 -ComposeProject rslhelper-browser-ci -ComposeFile docker-compose.test.yml -Profile e2e -BackendService e2e-backend -MailpitUrl http://localhost:18025 -BrowserImage $env:PLAYWRIGHT_CI_IMAGE
       - name: Remove isolated resources
         if: always()
         run: docker compose -p rslhelper-browser-ci -f docker-compose.test.yml --profile e2e down --volumes
