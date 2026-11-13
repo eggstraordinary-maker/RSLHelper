@@ -25,7 +25,43 @@ git pull --ff-only origin develop
 
 ## Запуск через Docker Compose
 
-Нужны Docker Desktop с Linux containers/WSL 2 и Docker Compose v2. Из корня проекта выполните:
+Нужны Docker Desktop с Linux containers/WSL 2, Docker Compose v2 и PowerShell
+(Windows PowerShell 5.1 либо PowerShell 7). На новом устройстве из корня проекта:
+
+```powershell
+.\scripts\setup_env.ps1
+notepad '.\backend\.env'
+# Заполните SMTP_USER, SMTP_PASSWORD и EMAIL_FROM своими данными.
+docker compose config --quiet
+docker compose up -d --build --wait --renew-anon-volumes
+docker compose ps
+```
+
+Скрипт читает опубликованные `.env.example` и создаёт пять файлов: `backend/.env`,
+`postgres/.env`, `seaweedfs/.env`, `seaweedfs/.env.admin` и `frontend/.env`.
+Для БД, JWT, S3 и консоли генерируются отдельные случайные секреты. Оба DB URL
+сразу согласованы с PostgreSQL, S3-ключи — с хранилищем; вручную переносить секреты
+с другого устройства не нужно. Пользователь консоли — `admin`, её новый пароль
+находится в локальном `seaweedfs/.env.admin`. Скрипт не печатает секреты.
+
+Повторный запуск сохраняет имеющиеся env-файлы. При неполном комплекте четырёх
+серверных файлов скрипт останавливается без перезаписи: восстановите недостающие
+файлы из примеров и согласуйте их с существующими настройками. Рабочие env и
+данные существующего устройства автоматически не заменяются.
+
+В SMTP-примере задана сигнатура Gmail: `smtp.gmail.com:465`, `ssl`, auth включён.
+Реальные `SMTP_USER`, `SMTP_PASSWORD` (пароль приложения) и `EMAIL_FROM` заполните
+самостоятельно. Для другого провайдера также измените host/port/security по его
+настройкам. Заглушки позволяют собрать и запустить стек, но отправка настоящей
+почты требует рабочих учётных данных и сетевого доступа. Для разработки без
+реальной почты используйте Mailpit из раздела ниже.
+
+`frontend/.env` нужен для Vite вне Docker; в Docker Compose адрес API и остальные
+локальные defaults уже передаются через `environment`. Dockerfile frontend
+выполняет `npm ci`; Dockerfile backend устанавливает Python-зависимости и ffmpeg.
+Для Docker-запуска не требуются локальные Python, Node.js, npm или папки docs/models.
+
+Если предпочитаете создать файлы вручную, альтернативный вариант:
 
 ```powershell
 if (-not (Test-Path '.\backend\.env')) {
@@ -40,6 +76,9 @@ if (-not (Test-Path '.\seaweedfs\.env')) {
 if (-not (Test-Path '.\seaweedfs\.env.admin')) {
     Copy-Item '.\seaweedfs\.env.admin.example' '.\seaweedfs\.env.admin'
 }
+if (-not (Test-Path '.\frontend\.env')) {
+    Copy-Item '.\frontend\.env.example' '.\frontend\.env'
+}
 notepad '.\backend\.env'
 notepad '.\postgres\.env'
 notepad '.\seaweedfs\.env'
@@ -49,7 +88,7 @@ docker compose up -d --build --wait --renew-anon-volumes
 docker compose ps
 ```
 
-Перед запуском замените примеры `SECRET_KEY`, `POSTGRES_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, настройте SMTP и задайте длинный случайный `WEED_ADMIN_PASSWORD` в `seaweedfs/.env.admin`. Пустой пароль останавливает запуск консоли. Файлы с секретами исключены из Git и Docker build context; учётные данные консоли загружаются только её контейнером. Пароль в `backend/.env` внутри `DATABASE_URL*` должен совпадать с `POSTGRES_PASSWORD` в `postgres/.env`. Локальные порты привязаны к `127.0.0.1`:
+При ручном копировании перед запуском замените примеры `SECRET_KEY`, `POSTGRES_PASSWORD`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, настройте SMTP и задайте длинный случайный `WEED_ADMIN_PASSWORD` в `seaweedfs/.env.admin`. Автоматический вариант выше уже генерирует эти локальные секреты, кроме SMTP. Пустой пароль останавливает запуск консоли. Файлы с секретами исключены из Git и Docker build context; учётные данные консоли загружаются только её контейнером. Пароль в `backend/.env` внутри `DATABASE_URL*` должен совпадать с `POSTGRES_PASSWORD` в `postgres/.env`. Локальные порты привязаны к `127.0.0.1`:
 
 - frontend: <http://localhost:5173>;
 - FastAPI и Swagger: <http://localhost:8000>, <http://localhost:8000/docs>;
@@ -92,6 +131,12 @@ python scripts/console_smoke.py
 ## Повторение проверок
 
 Основные проверки воспроизводятся на Python 3.11 и Node.js 22 в контейнерах:
+
+Комплект env-примеров и скрипт создания настроек дополнительно проверяются
+командой `python -m unittest discover -s scripts/tests -p 'test_*.py'`
+(для неё нужны Python 3, PowerShell и Docker Compose). CI также генерирует
+свежие env, собирает обычный Compose, проверяет API/S3/консоль и сборку frontend;
+после этого удаляет только собственный изолированный стенд.
 
 ```powershell
 docker compose -f docker-compose.yml -f docker-compose.test.yml build backend-tests frontend-tests
@@ -180,6 +225,26 @@ if ($LASTEXITCODE -ne 0) { throw 'Mail development startup failed' }
 ссылке и на экране входа. Ошибка сети при проверке ссылки имеет отдельный retry.
 Профиль защищён маршрутом; ошибка прогресса видна с повторной попыткой.
 
+### Как работает повторная отправка подтверждения
+
+Это ручное восстановление регистрации, если письмо не пришло, SMTP временно
+не работал или ссылка истекла. На экране регистрации, входа или недействительной
+ссылки введите тот же email в форме повторной отправки. Frontend вызывает
+`POST /auth/resend-verification`. Новый аккаунт не создаётся и пароль не меняется.
+
+Сервер проверяет наличие аккаунта и отсутствие подтверждения, заменяет старый
+одноразовый токен новым и сохраняет его хеш в БД, затем отправляет письмо.
+Ссылка действует 24 часа; используйте последнее письмо: предыдущая ссылка после
+повторной отправки недействительна. После успешного подтверждения токен нельзя
+использовать повторно. При ошибке SMTP сервер возвращает 503, и запрос можно
+повторить позднее. Очереди и автоматических повторов доставки сейчас нет.
+
+Общий лимит запросов писем — 3 за 15 минут на адрес (включая регистрацию и
+восстановление пароля). При превышении повторная отправка возвращает 429 и
+`Retry-After`. Лимиты настраиваются через `AUTH_MAIL_LIMIT` и
+`AUTH_MAIL_WINDOW_SECONDS`. Для уже подтверждённого адреса эта форма не нужна;
+если забыт пароль, используйте восстановление пароля.
+
 Текущий E2E runner больше не сохраняет пароль в JSON. Он создаёт случайный пароль
 только в окружении дочерних процессов, а manifest содержит run_id/user_id/lesson_ids/
 objects для выбора и cleanup. Старые инструкции о файле с credentials больше не
@@ -253,7 +318,8 @@ docker compose exec -T backend python -m scripts.smtp_check
 
 Она выводит только этап, режим, порт и безопасный класс/код ошибки. `ok=true`
 подтверждает транспорт и авторизацию, но не попадание сообщения во входящие.
-Для Gmail: порт 587 + SMTP_SECURITY=starttls либо 465 + SMTP_SECURITY=ssl,
+Для Gmail в примере выбран проверенный порт 465 + SMTP_SECURITY=ssl;
+альтернативный вариант — 587 + SMTP_SECURITY=starttls,
 SMTP_AUTH=true; при парольной авторизации используйте пароль приложения при
 включённой двухэтапной проверке. Обычный запуск использует backend/.env.
 Overlay docker-compose.mail.yml принудительно направляет письма в Mailpit,
@@ -261,6 +327,10 @@ Overlay docker-compose.mail.yml принудительно направляет 
 
 Если подключение закрывается до приветствия SMTP или TLS, пароль ещё не
 проверяется: проверьте сетевой доступ, VPN/фильтрацию и правила firewall.
+На проверенном устройстве с Volna потребовалось исключение только для домена
+`smtp.gmail.com` (подключение напрямую), при сохранении VPN для остального трафика.
+На другом устройстве настройка VPN независима от репозитория; порт 465 должен
+быть доступен из контейнера backend. `scripts.smtp_check` проверяет это без письма.
 Если сервер принял сообщение, отдельно проверьте «Спам» и ограничения провайдера.
 После SMTP 503 аккаунт уже существует; используйте повтор подтверждения.
 Лимит писем по умолчанию — 3 запроса за 15 минут на адрес, с учётом регистрации.

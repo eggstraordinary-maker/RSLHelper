@@ -15,6 +15,19 @@ jobs:
         run: |
           mkdir -p .local-test-artifacts/coverage
           docker compose -p rslhelper-backend-ci -f docker-compose.test.yml --profile test run --build --rm backend-tests
+      - name: Build and verify the published application with fresh env
+        run: |
+          pwsh -NoProfile -File ./scripts/setup_env.ps1
+          docker compose -p rslhelper-deployment-ci up -d --build --wait
+          curl -fsS -o /dev/null http://localhost:8000/health
+          curl -fsS -o /dev/null http://localhost:8000/videos/lessons
+          curl -fsS -o /dev/null http://localhost:5173/
+          docker compose -p rslhelper-deployment-ci exec -T backend python -m scripts.storage_smoke
+          python3 scripts/console_smoke.py
+          docker compose -p rslhelper-deployment-ci exec -T frontend npm run build
+      - name: Clean deployment smoke resources
+        if: always()
+        run: docker compose -p rslhelper-deployment-ci down --volumes
       - name: Clean backend test resources
         if: always()
         run: docker compose -p rslhelper-backend-ci -f docker-compose.test.yml --profile test down --volumes
