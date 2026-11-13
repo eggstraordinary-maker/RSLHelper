@@ -61,3 +61,9 @@ agents_settings/
 .worktrees/
 /recognition/models/
 .env.*
+
+# Publish only sanitized examples; real environment files remain ignored.
+!backend/.env.example
+!postgres/.env.example
+!seaweedfs/.env.example
+!seaweedfs/.env.admin.example

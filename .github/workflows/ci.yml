@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7.0.1
+      - name: Check clean-clone environment examples
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
       - name: Backend checks in the reproducible test image
         run: |
           mkdir -p .local-test-artifacts/coverage
