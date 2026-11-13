@@ -64,6 +64,7 @@ agents_settings/
 
 # Publish only sanitized examples; real environment files remain ignored.
 !backend/.env.example
+!frontend/.env.example
 !postgres/.env.example
 !seaweedfs/.env.example
 !seaweedfs/.env.admin.example

@@ -1,17 +1,16 @@
 """Check the configuration shipped to a clean clone, without real env or services."""
 import json
-from pathlib import Path
 import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 from urllib.parse import unquote, urlsplit
-
 
 ROOT = Path(__file__).resolve().parents[2]
 EXAMPLES = (
     "backend/.env.example", "postgres/.env.example",
-    "seaweedfs/.env.example", "seaweedfs/.env.admin.example",
+    "seaweedfs/.env.example", "seaweedfs/.env.admin.example", "frontend/.env.example",
 )
 
 
@@ -31,7 +30,7 @@ class DeploymentExamplesTest(unittest.TestCase):
             "docker", "compose", "--env-file", str(target / "empty.env"),
             "--project-directory", str(target), "-p", "rslhelper-example-check",
             "-f", str(target / "docker-compose.yml"), "config", "--format", "json",
-        ], capture_output=True, encoding="utf8", timeout=30)
+        ], check=False, capture_output=True, encoding="utf8", timeout=30)
         if result.returncode:
             raise AssertionError("Published examples must form a valid Compose configuration")
         cls.services = json.loads(result.stdout)["services"]
@@ -65,14 +64,22 @@ class DeploymentExamplesTest(unittest.TestCase):
         self.assertTrue(bool(console.get("WEED_ADMIN_USER")), "Console user example missing")
         self.assertTrue(bool(console.get("WEED_ADMIN_PASSWORD")), "Console password example missing")
 
+    def test_smtp_signature_and_frontend_defaults_are_published(self):
+        backend = self.services["backend"]["environment"]
+        self.assertTrue(backend["SMTP_HOST"] == "smtp.gmail.com")
+        self.assertTrue(str(backend["SMTP_PORT"]) == "465" and backend["SMTP_SECURITY"] == "ssl")
+        for field in ("SMTP_USER", "SMTP_PASSWORD", "EMAIL_FROM", "SMTP_AUTH", "SMTP_TIMEOUT_SECONDS"):
+            self.assertTrue(bool(backend.get(field)), "SMTP example field missing")
+        self.assertTrue(self.services["frontend"]["environment"]["VITE_API_URL"] == "http://localhost:8000")
+
     def test_examples_are_allowed_and_real_env_stays_ignored(self):
         command = ["git", "-c", f"safe.directory={ROOT.as_posix()}", "-C", str(ROOT),
                    "check-ignore", "--no-index", "--quiet"]
         for name in EXAMPLES:
-            result = subprocess.run(command + [name], capture_output=True, timeout=10)
+            result = subprocess.run(command + [name], check=False, capture_output=True, timeout=10)
             self.assertTrue(result.returncode == 1, "Sanitized examples must not be ignored")
             result = subprocess.run(command + [name.removesuffix(".example")],
-                                    capture_output=True, timeout=10)
+                                    check=False, capture_output=True, timeout=10)
             self.assertTrue(result.returncode == 0, "Real environment files must stay ignored")
 
 
