@@ -16,6 +16,7 @@ from app.config import settings
 from app.modules.learning import public as learning
 
 from . import repository as repo
+from .dto import AdminBootstrapResult
 from .errors import (
     AccountConflictError, AccountNotFoundError, AccountPermissionError,
     AccountPersistenceError, EmailAlreadyVerifiedError, IncorrectPasswordError, InvalidCredentialsError,
@@ -67,6 +68,30 @@ async def register_account(db: AsyncSession, data: schemas.UserCreate):
     except IntegrityError as exc:
         await db.rollback()
         raise _integrity_error(exc) from None
+    except BaseException:
+        await db.rollback()
+        raise
+
+
+async def bootstrap_admin(db: AsyncSession, user_id: int, *, dry_run: bool = True) -> AdminBootstrapResult:
+    """Explicit operator use case; never creates accounts or bypasses verification."""
+    try:
+        user = await repo.user_by_id(db, user_id, lock=True)
+        if user is None:
+            raise AccountNotFoundError("Account not found")
+        if (not user.is_active or not user.is_verified
+                or user.role not in {models.UserRole.USER.value, models.UserRole.ADMIN.value}):
+            raise AccountPermissionError("Account must be active, verified and have a supported role")
+        change_required = user.role != models.UserRole.ADMIN.value
+        result = AdminBootstrapResult(user_id=user.id, role=models.UserRole.ADMIN.value,
+                                      change_required=change_required, dry_run=dry_run)
+        if dry_run:
+            await db.rollback()
+        else:
+            if change_required:
+                await repo.set_role(db, user, models.UserRole.ADMIN.value)
+            await db.commit()
+        return result
     except BaseException:
         await db.rollback()
         raise

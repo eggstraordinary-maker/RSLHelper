@@ -30,6 +30,11 @@ async def list_users(db: AsyncSession, skip: int, limit: int):
     return (await db.scalars(select(models.User).order_by(models.User.id).offset(skip).limit(limit))).all()
 
 
+async def set_role(db: AsyncSession, user: models.User, role: str):
+    user.role = role
+    await db.flush()
+
+
 async def revoke_refresh(db: AsyncSession, digest: str):
     await db.execute(update(models.RefreshToken).where(
         models.RefreshToken.token_hash == digest, models.RefreshToken.is_revoked.is_(False),
