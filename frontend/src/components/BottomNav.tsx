@@ -1,8 +1,9 @@
 // src/components/BottomNav.tsx
 import React from 'react';
+import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-type Tab = 'dictionary' | 'translator' | 'learning' | 'admin';
+export type Tab = 'dictionary' | 'translator' | 'learning' | 'admin';
 
 const Icon = {
   dictionary: (
@@ -35,69 +36,15 @@ const TabLabels = {
   admin: 'admin_panel',
 };
 
-interface BottomNavProps {
-  active: Tab;
-  availableTabs: Tab[];
-  onChange: (t: Tab) => void;
-}
+interface BottomNavProps { availableTabs: Tab[] }
 
-export default function BottomNav({ active, availableTabs, onChange }: BottomNavProps) {
+export default function BottomNav({ availableTabs }: BottomNavProps) {
   const { t } = useTranslation();
-
-  const button = (tab: Tab, labelKey: string) => {
-    const isAvailable = availableTabs.includes(tab);
-    const isActive = active === tab;
-
-    return (
-      <button
-        aria-current={isActive ? 'true' : undefined}
-        onClick={() => {
-          if (!isAvailable) {
-            // Если вкладка недоступна, ничего не делаем
-            // (в App.tsx уже есть обработка показа модального окна)
-            return;
-          }
-          onChange(tab);
-        }}
-        className={`flex-1 py-2 px-2 flex flex-col items-center justify-center focus:outline-hidden transition-all ${
-          isActive
-            ? 'text-indigo-600'
-            : isAvailable
-            ? 'text-gray-600 hover:text-indigo-500'
-            : 'text-gray-300 cursor-not-allowed'
-        }`}
-        disabled={!isAvailable}
-        title={!isAvailable ? t('requires_authentication') : ''}
-      >
-        <div className="mb-1 relative">
-          {Icon[tab]}
-          {!isAvailable && (
-            <div className="absolute -top-1 -right-1">
-              <svg className="w-4 h-4 text-amber-500" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-              </svg>
-            </div>
-          )}
-        </div>
-        <div className="text-xs font-medium">{t(labelKey)}</div>
-      </button>
-    );
-  };
-
-  // return (
-  //   <nav className="bg-white/95 backdrop-blur border rounded-3xl shadow-lg flex p-1">
-  //     {button('dictionary', TabLabels.dictionary)}
-  //     {button('translator', TabLabels.translator)}
-  //     {button('learning', TabLabels.learning)}
-  //   </nav>
-  // );
-  return (
-    <nav className="bg-white/95 backdrop-blur border rounded-3xl shadow-lg flex p-1">
-      {availableTabs.map((tabKey) => (
-        <React.Fragment key={tabKey}>
-          {button(tabKey, TabLabels[tabKey])}
-        </React.Fragment>
-      ))}
-    </nav>
-  );
+  return <nav aria-label={t('navigation')} className="bg-white/95 backdrop-blur border rounded-3xl shadow-lg flex p-1">
+    {availableTabs.map(tab => <NavLink key={tab} to={`/${tab}`}
+      className={({ isActive }) => `flex-1 py-2 px-2 flex flex-col items-center justify-center rounded-2xl focus-visible:outline-2 focus-visible:outline-indigo-600 ${isActive ? 'text-indigo-600' : 'text-gray-600 hover:text-indigo-500'}`}>
+      <span className="mb-1">{Icon[tab]}</span>
+      <span className="text-xs font-medium">{t(TabLabels[tab])}</span>
+    </NavLink>)}
+  </nav>;
 }

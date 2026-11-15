@@ -46,7 +46,7 @@ test('admin user retry, native confirmation and deletion preserve another learne
 
     await page.addInitScript(() => { localStorage.setItem('lang', 'ru'); document.cookie = 'lang=ru; path=/'; });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await page.getByRole('link', { name: 'Войти', exact: true }).click();
     await page.getByLabel('Email', { exact: true }).fill(`e2e_${fixture.run_id}@example.com`);
     await page.getByLabel('Пароль', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
@@ -55,7 +55,7 @@ test('admin user retry, native confirmation and deletion preserve another learne
       if (listFails) await route.fulfill({ status: 503, json: { detail: 'Injected failure' } });
       else await route.continue();
     });
-    await page.getByRole('button', { name: 'Админка', exact: true }).click();
+    await page.getByRole('link', { name: 'Админка', exact: true }).click();
     await expect(page.getByRole('alert')).toContainText('Не удалось загрузить пользователей.');
     await expect(page.getByText('На этой странице нет пользователей', { exact: true })).toHaveCount(0);
     listFails = false;

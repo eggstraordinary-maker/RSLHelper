@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from 'react-router-dom';
 import PasswordReset from "./PasswordReset";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from 'react-i18next';
@@ -92,16 +93,12 @@ const LoginPage: React.FC<LoginProps> = ({ onClose, onLoginSuccess, onGuestMode 
       <div className="mt-6 text-center space-y-3">
         <div className="text-sm text-gray-600">
           {t('auth:no_account')}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              onClose();
-              window.location.href = '/register';
-            }}
+          <Link
+            to="/register"
             className="text-indigo-600 hover:text-indigo-800 font-medium"
           >
             {t('auth:register_here')}
-          </button>
+          </Link>
         </div>
       </div>
     </div>

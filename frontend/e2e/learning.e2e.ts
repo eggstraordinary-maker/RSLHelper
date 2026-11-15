@@ -10,11 +10,11 @@ if (!password) throw new Error('RSL_E2E_PASSWORD is required for browser login')
 
 test('real login, duplicate titles, video/S3, practice, completion, reload and camera lifecycle', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Войти', exact: true }).first().click();
+  await page.getByRole('link', { name: 'Войти', exact: true }).click();
   await page.getByLabel('Email', { exact: true }).fill(`e2e_${fixture.run_id}@example.com`);
   await page.getByLabel('Пароль', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
-  await page.getByRole('button', { name: 'Обучение', exact: true }).click();
+  await page.getByRole('link', { name: 'Обучение', exact: true }).click();
   await page.getByRole('button', { name: `E2E practice ${fixture.run_id}`, exact: true }).nth(1).click();
   const video = page.getByLabel('Эталонный жест');
   await expect(video).toHaveAttribute('src', /\/videos\/lessons\/[0-9a-f-]+\/content$/);
@@ -35,7 +35,7 @@ test('real login, duplicate titles, video/S3, practice, completion, reload and c
   await page.getByRole('button', { name: 'Выключить камеру', exact: true }).click();
   await expect(page.getByText('Камера выключена.', { exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('button', { name: 'Обучение', exact: true }).click();
+  await page.getByRole('link', { name: 'Обучение', exact: true }).click();
   await page.getByRole('button', { name: `E2E practice ${fixture.run_id}`, exact: true }).nth(1).click();
   await expect(page.getByText('Урок пройден по вашей отметке.', { exact: true })).toBeVisible();
   await expect(page.getByText('Повторений сохранено: 1')).toBeVisible();

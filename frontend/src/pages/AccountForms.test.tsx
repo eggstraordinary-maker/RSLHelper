@@ -152,10 +152,10 @@ describe('profile and guest flow', () => {
     expect((screen.getByLabelText(strings.name) as HTMLInputElement).value).toBe(testUser.username);
   });
 
-  it('enters guest mode through the login dialog without calling a hook in a handler', async () => {
+  it('enters guest mode through the login route without calling a hook in a handler', async () => {
     publicApi.onGet('/videos/lessons').reply(200, []);
     await show(<App />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Войти' }));
+    fireEvent.click(await screen.findByRole('link', { name: 'Войти' }));
     const guest = screen.getAllByRole('button', { name: 'Продолжить без регистрации' });
     fireEvent.click(guest[0]);
     await screen.findByText('Вы в гостевом режиме. Доступен только словарь.');

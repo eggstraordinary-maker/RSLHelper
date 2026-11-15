@@ -17,6 +17,9 @@
   "admin_panel": "Admin",
   "save": "Save",
   "cancel": "Cancel",
+  "notFound": "404 — Page not found",
+  "accessDenied": "You do not have permission to access this section.",
+  "navigation": "Application sections",
   "loading": "Loading...", 
   "exit_guest_mode": "Exit Guest Mode"
 }
