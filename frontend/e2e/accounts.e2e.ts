@@ -52,7 +52,7 @@ test('real browser registration, SMTP verification/reset, profile and deletion',
     await expect(page.getByText('Email подтверждён. Теперь можно войти в систему.', { exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => location.hash)).toBe('');
     await page.getByRole('link', { name: 'На главную', exact: true }).click();
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await page.getByRole('link', { name: 'Войти', exact: true }).click();
     await page.getByLabel('Email', { exact: true }).fill(email);
     await page.getByLabel('Пароль', { exact: true }).fill(password);
     await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
@@ -62,8 +62,7 @@ test('real browser registration, SMTP verification/reset, profile and deletion',
     await page.getByRole('button', { name: 'Сохранить', exact: true }).click();
     await expect(page.getByText('Профиль успешно обновлён.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Выйти из аккаунта', exact: true }).click();
-    await expect(page).toHaveURL('/');
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await expect(page).toHaveURL('/login');
     await page.getByRole('button', { name: 'Забыли пароль?', exact: true }).click();
     await page.getByLabel('Email', { exact: true }).fill(email);
     await page.getByRole('button', { name: 'Отправить ссылку для восстановления', exact: true }).click();
@@ -75,7 +74,7 @@ test('real browser registration, SMTP verification/reset, profile and deletion',
     await page.getByRole('button', { name: 'Изменить пароль', exact: true }).click();
     await expect(page.getByText('Пароль изменён. Теперь можно войти с новым паролем.', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'На главную', exact: true }).click();
-    await page.getByRole('button', { name: 'Войти', exact: true }).click();
+    await page.getByRole('link', { name: 'Войти', exact: true }).click();
     await page.getByLabel('Email', { exact: true }).fill(email);
     await page.getByLabel('Пароль', { exact: true }).fill(newPassword);
     await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
@@ -83,7 +82,7 @@ test('real browser registration, SMTP verification/reset, profile and deletion',
     await page.getByRole('button', { name: 'Удалить аккаунт', exact: true }).click();
     await page.getByLabel('Введите пароль для подтверждения удаления', { exact: true }).fill(newPassword);
     await page.getByRole('button', { name: 'Подтвердить удаление', exact: true }).click();
-    await expect(page).toHaveURL('/');
+    await expect(page).toHaveURL('/login');
     await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   } finally {
     // The trusted test fixture owns this temporary account; no working users.
@@ -104,9 +103,9 @@ test('real browser registration, SMTP verification/reset, profile and deletion',
 test('guest mode survives reload and an anonymous profile returns to the entry screen', async ({ page }) => {
   await page.addInitScript(() => { localStorage.setItem('lang', 'ru'); document.cookie = 'lang=ru; path=/'; });
   await page.goto('/profile');
-  await expect(page).toHaveURL('/');
+  await expect(page).toHaveURL('/login');
   await expect(page.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Продолжить без регистрации →', exact: true }).click();
+  await page.getByRole('button', { name: 'Продолжить без регистрации', exact: true }).click();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'Словарь жестов', exact: true })).toBeVisible();
   await expect(page.getByText('Вы в гостевом режиме. Доступен только словарь.', { exact: true })).toBeVisible();
@@ -115,7 +114,7 @@ test('guest mode survives reload and an anonymous profile returns to the entry s
 test('logout propagates to another open profile tab', async ({ page, context }) => {
   await context.addInitScript(() => { localStorage.setItem('lang', 'ru'); document.cookie = 'lang=ru; path=/'; });
   await page.goto('/');
-  await page.getByRole('button', { name: 'Войти', exact: true }).click();
+  await page.getByRole('link', { name: 'Войти', exact: true }).click();
   await page.getByLabel('Email', { exact: true }).fill(`e2e_${fixture.run_id}@example.com`);
   await page.getByLabel('Пароль', { exact: true }).fill(fixturePassword);
   await page.getByRole('button', { name: 'Войти', exact: true }).last().click();
@@ -124,7 +123,7 @@ test('logout propagates to another open profile tab', async ({ page, context }) 
   await other.goto('/profile');
   await expect(other.getByRole('heading', { name: 'Профиль', exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Выйти из аккаунта', exact: true }).click();
-  await expect(other).toHaveURL('/');
+  await expect(other).toHaveURL('/login');
   await expect(other.getByRole('button', { name: 'Войти', exact: true })).toBeVisible();
   await expect(other.getByRole('heading', { name: 'Профиль', exact: true })).toHaveCount(0);
 });

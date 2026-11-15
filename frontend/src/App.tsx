@@ -1,265 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import BottomNav from './components/BottomNav';
-import Dictionary from './pages/Dictionary';
-import Translator from './pages/Translator';
-import Learning from './pages/Learning';
-import LoginPage from './pages/LogIn';
-import AdminPage from './pages/AdminPage';
-import { useAuth } from './contexts/AuthContext';
+import React, { useEffect, useState } from 'react';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router-dom';
-import LanguageSwitcher from './components/LanguageSwitcher';
-import { SessionStatus } from './features/auth';
+import { useAuth } from './contexts/AuthContext';
+import { RequireSession, SessionStatus } from './features/auth';
+import { AppShell } from './app/AppShell';
+import { returnPath } from './app/returnPath';
+import Dictionary from './pages/Dictionary';
+import Learning from './pages/Learning';
+import Translator from './pages/Translator';
+import AdminPage from './pages/AdminPage';
+import LoginPage from './pages/LogIn';
+import Register from './pages/Register';
+import EmailVerification from './pages/EmailVerification';
+import PasswordResetPage from './pages/PasswordResetPage';
+import Profile from './pages/Profile';
 
-type Tab = 'dictionary' | 'translator' | 'learning' | 'admin';
-
-// Компонент страницы выбора
-const AuthChoicePage: React.FC<{ onShowLogin: () => void }> = ({ onShowLogin }) => {
-  const { enterGuestMode } = useAuth();
+function Landing() {
+  const { user, isGuest, isLoading, sessionError, enterGuestMode } = useAuth();
+  const navigate = useNavigate();
   const { t } = useTranslation();
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8">
-        <div className="text-center">
-          <div className="mx-auto h-20 w-20 bg-gradient-to-br from-indigo-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-2xl">
-            РЖЯ
-          </div>
-          <h1 className="mt-6 text-3xl font-extrabold text-gray-900">
-            {t('app_title')}
-          </h1>
-          <p className="mt-2 text-gray-600">
-            {t('app_description')}
-          </p>
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
-          <h2 className="text-xl font-semibold text-center">{t('welcome')}!</h2>
-
-          <div className="space-y-4">
-            <button
-              onClick={onShowLogin}
-              className="w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-            >
-              {t('login')}
-            </button>
-
-            <button
-              onClick={() => {
-                window.location.href = '/register';
-              }}
-              className="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-md shadow-xs text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-            >
-              {t('register')}
-            </button>
-          </div>
-
-          <div className="text-center text-sm text-gray-500">
-            <p>{t('or_continue_as_guest')}</p>
-            <button
-              onClick={() => {
-                enterGuestMode();
-                // window.location.reload();
-              }}
-              className="mt-2 text-indigo-600 hover:text-indigo-500 font-medium"
-            >
-              {t('continue_as_guest')} →
-            </button>
-          </div>
-        </div>
+  if (isLoading || sessionError) return <SessionStatus />;
+  if (user || isGuest) return <Navigate to="/dictionary" replace />;
+  return <main className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="max-w-md w-full space-y-8 text-center">
+      <h1 className="text-3xl font-extrabold">{t('app_title')}</h1>
+      <p className="text-gray-600">{t('app_description')}</p>
+      <div className="bg-white rounded-2xl shadow-xl p-8 space-y-6">
+        <h2 className="text-xl font-semibold">{t('welcome')}!</h2>
+        <Link to="/login" className="block py-3 rounded-md bg-indigo-600 text-white">{t('login')}</Link>
+        <Link to="/register" className="block py-3 rounded-md border">{t('register')}</Link>
+        <p className="text-sm text-gray-500">{t('or_continue_as_guest')}</p>
+        <button className="text-indigo-600" onClick={() => { enterGuestMode(); navigate('/dictionary'); }}>
+          {t('continue_as_guest')} →
+        </button>
       </div>
     </div>
-  );
-};
+  </main>;
+}
 
-// Основной компонент приложения
-const MainApp: React.FC<{ initialTab?: Tab }> = ({ initialTab = 'dictionary' }) => {
-  const [tab, setTab] = useState<Tab>(initialTab);
-  const [showLogin, setShowLogin] = useState(false);
-  const { user, logout, isGuest } = useAuth();
-  const { t } = useTranslation();
-
-  // Если гость пытается перейти на недоступную вкладку, перенаправляем на словарь
-  useEffect(() => {
-    if (isGuest && tab !== 'dictionary') {
-      setTab('dictionary');
-    }
-  }, [isGuest, tab]);
-
-  // Определяем доступные вкладки
-  const availableTabs: Tab[] = isGuest ? ['dictionary'] : ['dictionary', 'translator', 'learning'];
-
-  const effectiveTabs = user?.role === 'admin'
-  ? [...availableTabs, 'admin' as Tab]
-  : availableTabs;
-
-  return (
-    <div className="min-h-screen bg-gray-50 text-gray-800 flex flex-col">
-      <header className="bg-white shadow-xs">
-        <div className="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
-              РЖЯ
-            </div>
-            <div className="text-lg font-semibold">{t('app_title')}</div>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-3">
-            <LanguageSwitcher />
-            {isGuest ? (
-              <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <span className="text-sm text-amber-600 bg-amber-50 px-3 py-1 rounded-full">
-                  {t('guest_mode')}
-                </span>
-                <button
-                  onClick={() => setShowLogin(true)}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-medium hover:bg-indigo-700 transition-colors"
-                >
-                  {t('login')}
-                </button>
-                <button
-                  onClick={() => {
-                    logout();
-                    // Выходим из гостевого режима
-                    localStorage.removeItem('guest_mode');
-                  }}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors"
-                >
-                  {t('exit_guest_mode') || 'Выйти'}
-                </button>
-              </div>
-            ) : (
-              <div className="flex min-w-0 items-center gap-2">
-                <Link to="/profile" className="max-w-44 truncate text-sm text-indigo-600 hover:text-indigo-800" title={user?.username}>
-                  {user?.username}
-                </Link>
-                <button
-                  onClick={logout}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md text-sm font-medium hover:bg-gray-300 transition-colors"
-                >
-                  {t('logout')}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 container mx-auto px-4 py-6 pb-20">
-        {isGuest && (
-          <div className="mb-4 bg-gradient-to-r from-amber-50 to-orange-50 border-l-4 border-amber-400 p-4 rounded">
-            <div className="flex">
-              <div className="shrink-0">
-                <svg className="h-5 w-5 text-amber-400" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-amber-800">
-                  <span className="font-medium">{t('guest_mode_warning')}</span>
-                  <button
-                    onClick={() => setShowLogin(true)}
-                    className="ml-2 font-medium text-indigo-600 hover:text-indigo-500"
-                  >
-                    {t('register_for_full_access')}
-                  </button>
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="mb-4">
-          <h2 className="text-xl font-bold capitalize">
-            {tab === 'dictionary' && t('dictionary')}
-            {tab === 'translator' && t('translator')}
-            {tab === 'learning' && t('learning')}
-            {tab === 'admin' && t('admin_panel')}
-          </h2>
-        </div>
-
-        <div className="w-full">
-          {tab === 'dictionary' && <Dictionary />}
-          {tab === 'translator' && !isGuest && <Translator />}
-          {tab === 'learning' && !isGuest && <Learning />}
-          {tab === 'admin' && <AdminPage />}
-        </div>
-      </main>
-
-      <footer className="fixed bottom-4 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-30">
-        <BottomNav
-          active={tab}
-          availableTabs={effectiveTabs}
-          onChange={(t) => {
-            if (isGuest && t !== 'dictionary') {
-              setShowLogin(true);
-              return;
-            }
-            setTab(t);
-          }}
-        />
-      </footer>
-
-      {showLogin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <LoginPage
-              onClose={() => setShowLogin(false)}
-              onLoginSuccess={() => {
-                setShowLogin(false);
-                // window.location.reload();
-              }}
-              onGuestMode={() => {
-                // Пользователь уже в гостевом режиме, ничего не делаем
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// Обёртка App
-const App: React.FC = () => {
-  const { user, isGuest, isLoading, sessionError, enterGuestMode } = useAuth();
-  const [showLogin, setShowLogin] = useState(false);
-
+function LoginRoute() {
+  const { user, isLoading, sessionError, enterGuestMode } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const destination = returnPath(location.state);
   if (isLoading || sessionError) return <SessionStatus />;
-  // 1. Авторизованный пользователь
-  if (user) {
-    return <MainApp />;
-  }
+  if (user) return <Navigate to={destination} replace />;
+  return <main className="max-w-md mx-auto p-4">
+    <LoginPage onClose={() => navigate('/')} onLoginSuccess={() => undefined}
+      onGuestMode={() => { enterGuestMode(); navigate('/dictionary', { replace: true }); }} />
+  </main>;
+}
 
-  // 2. Гостевой режим
-  if (isGuest) {
-    return <MainApp initialTab="dictionary" />;
-  }
+function PasswordResetWrapper() {
+  const { token: pathToken } = useParams<{ token: string }>();
+  const navigate = useNavigate();
+  const [fragmentToken] = useState(() => window.location.hash.slice(1));
+  useEffect(() => {
+    if (fragmentToken) window.history.replaceState(null, '', window.location.pathname + window.location.search);
+  }, [fragmentToken]);
+  return <PasswordResetPage token={pathToken ?? fragmentToken} onBack={() => navigate('/')} />;
+}
 
-  // 3. Страница выбора (не авторизован и не гость)
-  return (
-    <>
-      <AuthChoicePage onShowLogin={() => setShowLogin(true)} />
-      
-      {showLogin && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <LoginPage
-              onClose={() => setShowLogin(false)}
-              onLoginSuccess={() => {
-                setShowLogin(false);
-                // Успешный вход - состояние обновится автоматически через AuthContext
-              }}
-              onGuestMode={() => {
-                // В гостевой режим из начальной страницы
-                enterGuestMode();
-                setShowLogin(false);
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </>
-  );
-};
+function ExitGuest() {
+  const { exitGuestMode } = useAuth();
+  const navigate = useNavigate();
+  useEffect(() => { exitGuestMode(); navigate('/', { replace: true }); }, [exitGuestMode, navigate]);
+  return null;
+}
 
-export default App;
+function NotFound() {
+  const { t } = useTranslation();
+  return <main className="max-w-md mx-auto p-6 space-y-4">
+    <h1 className="text-2xl font-semibold">{t('notFound')}</h1>
+    <Link className="text-indigo-700" to="/dictionary">{t('dictionary')}</Link>
+  </main>;
+}
+
+export default function App() {
+  return <Routes>
+    <Route path="/" element={<Landing />} />
+    <Route path="/login" element={<LoginRoute />} />
+    <Route element={<AppShell />}>
+      <Route path="/dictionary" element={<Dictionary />} />
+      <Route path="/learning" element={<RequireSession><Learning /></RequireSession>} />
+      <Route path="/translator" element={<RequireSession><Translator /></RequireSession>} />
+      <Route path="/admin" element={<RequireSession adminOnly><AdminPage /></RequireSession>} />
+    </Route>
+    <Route path="/profile" element={<RequireSession><Profile /></RequireSession>} />
+    <Route path="/register" element={<Register />} />
+    <Route path="/verify-email" element={<EmailVerification />} />
+    <Route path="/verify-email/:token" element={<EmailVerification />} />
+    <Route path="/reset-password" element={<PasswordResetWrapper />} />
+    <Route path="/reset-password/:token" element={<PasswordResetWrapper />} />
+    <Route path="/exit-guest" element={<ExitGuest />} />
+    <Route path="*" element={<NotFound />} />
+  </Routes>;
+}
