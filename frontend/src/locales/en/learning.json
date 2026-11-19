@@ -1,1 +1,27 @@
-[]
+{
+  "sections": {
+    "alphabet": "Alphabet",
+    "basic": "Basic signs"
+  },
+  "sectionNavigation": "Learning sections",
+  "contents": "Lessons in this section",
+  "loadingCatalog": "Loading lessons…",
+  "emptySection": "There are no lessons in this section yet.",
+  "catalogError": "Could not load the learning sections.",
+  "refreshCatalog": "Refresh lessons",
+  "retryCatalog": "Retry loading lessons",
+  "practiceTitle": "Self-practice",
+  "practiceInstructions": "Watch the reference video, repeat the sign, and save your practice. You mark the lesson as complete yourself. Automatic assessment is currently unavailable.",
+  "loadingProgress": "Loading progress…",
+  "progressError": "Could not load progress.",
+  "retryProgress": "Retry loading progress",
+  "attempts": "Repetitions saved:",
+  "completed": "You marked this lesson complete.",
+  "inProgress": "This lesson has not been marked complete yet.",
+  "recordPractice": "I repeated the sign",
+  "completeLesson": "Mark lesson complete",
+  "saving": "Saving…",
+  "practiceSaved": "Self-practice saved.",
+  "completionSaved": "Lesson marked complete.",
+  "saveError": "Could not save progress. Please try again."
+}

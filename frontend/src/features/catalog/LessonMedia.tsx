@@ -26,7 +26,7 @@ function MediaAttempt({ src, onRetry, focusOnMount }: {
           </button>
         </div>
       )}
-      <video ref={video} src={src} controls preload="auto" tabIndex={0}
+      <video ref={video} src={src} controls playsInline preload="auto" tabIndex={0}
         aria-label={t('videoLabel')} aria-busy={status === 'loading'}
         className="w-full rounded-lg shadow-md focus-visible:outline-2 focus-visible:outline-indigo-600"
         onLoadedData={() => setStatus(previous => previous === 'loading' ? 'ready' : previous)}
