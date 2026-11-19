@@ -1,12 +1,13 @@
-"""HTTP contracts for the authenticated catalog editor."""
+"""HTTP contracts for the catalog editor and published lessons."""
 
 from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.modules.catalog.dto import CatalogAction, ReviewStatus
+from app.modules.catalog.dto import CatalogAction, LearningSection, LessonRecord, ReviewStatus, RUSSIAN_ALPHABET
+from app.schemas import LessonResponse
 
 VersionNumber = Annotated[int, Field(ge=1, le=2_147_483_647)]
 
@@ -18,6 +19,28 @@ class CatalogFields(BaseModel):
     category: str = Field(default="", max_length=100)
     source: str = Field(default="", max_length=500, description="Provenance of the current video")
     consent_reference: str = Field(default="", max_length=500, description="Internal reference to the permission to publish")
+    learning_section: LearningSection | None = Field(
+        default=None, description="Default is basic for new drafts. Omit on edit to keep the existing placement.",
+    )
+    alphabet_letter: str | None = Field(
+        default=None, min_length=1, max_length=1, description="Russian letter required for the alphabet section.",
+    )
+
+    @field_validator("alphabet_letter")
+    @classmethod
+    def validate_alphabet_letter(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        letter = value.upper()
+        if len(letter) != 1 or letter not in RUSSIAN_ALPHABET:
+            raise ValueError("Use a letter of the Russian alphabet")
+        return letter
+
+    @model_validator(mode="after")
+    def validate_learning_section(self):
+        if (self.learning_section == "alphabet") != (self.alphabet_letter is not None):
+            raise ValueError("Specify a Russian letter only for the alphabet section")
+        return self
 
 
 class CatalogCreate(CatalogFields):
@@ -59,6 +82,8 @@ class CatalogRevisionResponse(BaseModel):
     action: str
     author_id: int | None
     created_at: datetime
+    learning_section: LearningSection
+    alphabet_letter: str | None
 
 
 class CatalogGestureResponse(BaseModel):
@@ -78,3 +103,18 @@ class CatalogConflictDetail(BaseModel):
 
 class CatalogConflictResponse(BaseModel):
     detail: CatalogConflictDetail
+
+
+class LearningSectionsResponse(BaseModel):
+    alphabet: list[LessonResponse] = Field(description="Published lessons in Russian alphabetical order")
+    basic: list[LessonResponse] = Field(description="Published lessons ordered by category, then title")
+
+
+def lesson_response(lesson: LessonRecord) -> LessonResponse:
+    return LessonResponse(
+        id=lesson.id, lesson_id=lesson.lesson_id, filename=lesson.filename,
+        description=lesson.description, is_published=lesson.is_published,
+        media_url=f"/videos/lessons/{lesson.lesson_id}/content",
+        title=lesson.title, category=lesson.category, gesture_id=lesson.gesture_id, version=lesson.version,
+        alphabet_letter=lesson.alphabet_letter,
+    )

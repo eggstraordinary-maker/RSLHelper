@@ -1,13 +1,40 @@
 """User-scoped learning use cases; no HTTP or cross-module repositories."""
 
 from datetime import datetime, timezone
+from unicodedata import normalize
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import schemas
 from app.modules.catalog import public as catalog
+from app.modules.catalog.dto import LearningSection, RUSSIAN_ALPHABET
 from . import repository as repo
 from .errors import AmbiguousLessonError, AttemptConflictError, LessonNotFoundError
+
+
+_RUSSIAN_ORDER = {letter.lower(): index for index, letter in enumerate(RUSSIAN_ALPHABET)}
+
+
+def _russian_order(value: str) -> tuple[int, ...]:
+    text = normalize("NFC", value.strip()).casefold()
+    return tuple(_RUSSIAN_ORDER.get(char, len(_RUSSIAN_ORDER) + ord(char)) for char in text)
+
+
+def _title_order(lesson: catalog.LessonRecord) -> tuple[int, ...]:
+    return _russian_order(lesson.title or lesson.description or lesson.filename)
+
+
+async def list_sections(db: AsyncSession) -> dict[LearningSection, list[catalog.LessonRecord]]:
+    sections: dict[LearningSection, list[catalog.LessonRecord]] = {"alphabet": [], "basic": []}
+    for lesson in await catalog.list_lessons(db):
+        sections[lesson.learning_section].append(lesson)
+    sections["alphabet"].sort(key=lambda lesson: (
+        _russian_order(lesson.alphabet_letter or ""), _title_order(lesson), lesson.id,
+    ))
+    sections["basic"].sort(key=lambda lesson: (
+        not lesson.category, _russian_order(lesson.category or ""), _title_order(lesson), lesson.id,
+    ))
+    return sections
 
 
 async def get_stats(db: AsyncSession, user_id: int) -> schemas.ProgressStats:

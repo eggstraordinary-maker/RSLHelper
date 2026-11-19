@@ -10,6 +10,7 @@ from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.concurrency import run_in_threadpool
 
+from app.catalog_schemas import lesson_response
 from app.database import get_async_db
 from app.dependencies import get_current_admin_user
 from app.modules.catalog import public as catalog
@@ -21,15 +22,6 @@ from app.schemas import LessonResponse, UserResponse, VideoResponse
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 logger = logging.getLogger(__name__)
-
-
-def _lesson_response(lesson) -> LessonResponse:
-    return LessonResponse(
-        id=lesson.id, lesson_id=lesson.lesson_id, filename=lesson.filename,
-        description=lesson.description, is_published=lesson.is_published,
-        media_url=f"/videos/lessons/{lesson.lesson_id}/content",
-        title=lesson.title, category=lesson.category, gesture_id=lesson.gesture_id, version=lesson.version,
-    )
 
 
 def _legacy_response(lesson) -> VideoResponse:
@@ -76,7 +68,7 @@ async def upload_video(
 
 @router.get("/lessons", response_model=list[LessonResponse], summary="Получить опубликованные уроки")
 async def list_lessons(db: AsyncSession = Depends(get_async_db)):
-    return [_lesson_response(lesson) for lesson in await catalog.list_lessons(db)]
+    return [lesson_response(lesson) for lesson in await catalog.list_lessons(db)]
 
 
 class _BodyOwner:

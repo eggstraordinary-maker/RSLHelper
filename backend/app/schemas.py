@@ -202,4 +202,5 @@ class LessonResponse(BaseModel):
     category: str | None = None
     gesture_id: str | None = None
     version: int | None = None
+    alphabet_letter: str | None = Field(default=None, description="Russian letter for a published alphabet lesson")
     is_learning_material: bool = Field(default=True, description="A learning example without an integrated model class")

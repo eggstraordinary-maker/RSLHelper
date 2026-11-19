@@ -14,6 +14,7 @@ from alembic.migration import MigrationContext
 from alembic.script import ScriptDirectory
 from sqlalchemy import create_engine, inspect, MetaData, Table, select, text
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import models
@@ -109,17 +110,22 @@ def test_catalog_upgrade_keeps_legacy_publication_id_and_progress(migration_url)
                 user_id=user_id, lesson_id=published_id, attempt_id=attempt, completed=True,
                 response_payload={"attempts": 7},
             ))
+        _upgrade(migration_url, "0008_catalog_revisions")
+        with Session(engine) as db:
+            previous_ids = {entry.lesson_id: entry.id for entry in db.scalars(select(models.CatalogGesture))}
         _upgrade(migration_url)
         with Session(engine) as db:
             visible = db.scalar(select(models.VideoFile).where(models.VideoFile.lesson_id == published_id))
             assert visible.is_published and visible.object_name == "existing.mp4"
             gestures = {entry.lesson_id: entry for entry in db.scalars(select(models.CatalogGesture))}
             assert set(gestures) == {published_id, hidden_id}
+            assert {lesson_id: gesture.id for lesson_id, gesture in gestures.items()} == previous_ids
             assert gestures[published_id].published_version == 1
             assert gestures[hidden_id].published_version is None
             imported = db.get(models.CatalogRevision, (gestures[published_id].id, 1))
             assert imported.title == "Existing sign" and imported.action == "imported"
             assert imported.consent_reference == "" and imported.author_id is None
+            assert imported.learning_section == "basic" and imported.alphabet_letter is None
             assert db.get(models.CatalogMedia, imported.media_id).object_name == visible.object_name
             progress = db.scalar(select(models.UserLearningProgress))
             assert progress.lesson_id == published_id and progress.attempts == 7 and progress.completed
@@ -136,6 +142,37 @@ def test_catalog_upgrade_keeps_legacy_publication_id_and_progress(migration_url)
                 os.environ.pop("DATABASE_URL", None)
             else:
                 os.environ["DATABASE_URL"] = previous
+    finally:
+        engine.dispose()
+
+
+def test_learning_placement_constraint_and_downgrade_guard(migration_url, monkeypatch):
+    _upgrade(migration_url)
+    engine = create_engine(migration_url)
+    gesture_id = str(uuid4())
+    try:
+        with Session(engine) as db:
+            lesson = models.VideoFile(filename="letter.mp4", is_published=False)
+            db.add(lesson)
+            db.flush()
+            db.add(models.CatalogGesture(id=gesture_id, lesson_id=lesson.lesson_id, version=1))
+            db.flush()
+            db.add(models.CatalogRevision(
+                gesture_id=gesture_id, version=1, title="Буква", description="", category="",
+                source="", consent_reference="", review_status="draft", review_note="", action="created",
+            ))
+            db.commit()
+        with pytest.raises(IntegrityError), engine.begin() as connection:
+            connection.execute(text("UPDATE catalog_revisions SET learning_section = 'alphabet'"))
+        with pytest.raises(IntegrityError), engine.begin() as connection:
+            connection.execute(text("UPDATE catalog_revisions SET learning_section = 'alphabet', alphabet_letter = 'A'"))
+        with engine.begin() as connection:
+            connection.execute(text("UPDATE catalog_revisions SET learning_section = 'alphabet', alphabet_letter = 'Ё'"))
+        monkeypatch.setenv("DATABASE_URL", migration_url)
+        with pytest.raises(RuntimeError, match="Cannot remove alphabet placements"):
+            command.downgrade(Config(str(ALEMBIC_INI)), "0008_catalog_revisions")
+        with Session(engine) as db:
+            assert db.get(models.CatalogRevision, (gesture_id, 1)).alphabet_letter == "Ё"
     finally:
         engine.dispose()
 

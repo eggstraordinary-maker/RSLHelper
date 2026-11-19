@@ -4,13 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from . import repository
 from .errors import AmbiguousLessonError, AttemptConflictError, LessonNotFoundError
-from .service import get_stats, list_legacy, list_progress, record_progress
+from .service import get_stats, list_legacy, list_progress, list_sections, record_progress
 
 __all__ = [
     "remove_user_data",
     "get_stats",
     "list_legacy",
     "list_progress",
+    "list_sections",
     "record_progress",
     "AmbiguousLessonError",
     "LessonNotFoundError",

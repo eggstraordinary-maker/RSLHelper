@@ -2,6 +2,10 @@
 
 from uuid import uuid4
 
+import pytest
+from sqlalchemy.orm import Session
+
+from app import models
 from app.modules.catalog import repository as repo
 from media_fixture import tiny_mp4_bytes
 import test_media
@@ -117,3 +121,81 @@ def test_publication_write_failure_and_retry_are_atomic(media_api, monkeypatch):
     assert client.get(url, headers=admin).json() == approved
     assert client.get("/videos/lessons").json() == []
     assert change(client, admin, url, approved, "publish").status_code == 200
+
+
+@pytest.mark.parametrize("placement", [
+    {"learning_section": "alphabet"},
+    {"learning_section": "alphabet", "alphabet_letter": "A"},
+    {"learning_section": "alphabet", "alphabet_letter": "ß"},
+    {"learning_section": "basic", "alphabet_letter": "А"},
+    {"alphabet_letter": "А"},
+    {"learning_section": "advanced"},
+])
+def test_invalid_learning_placement_does_not_create_a_draft(media_api, placement):
+    client, _, _, admin, _ = media_api
+    rejected = client.post("/admin/catalog", headers=admin, json={
+        "gesture_id": str(uuid4()), "title": "Draft", **placement,
+    })
+    assert rejected.status_code == 422
+    assert client.get("/admin/catalog", headers=admin).json() == []
+
+
+def test_learning_sections_require_login_and_keep_russian_order(media_api):
+    client, engine, _, _, learner = media_api
+    endpoint = "/learning/sections"
+    assert client.get(endpoint).status_code == 401
+    assert client.get("/videos/lessons").status_code == 200
+    assert client.get(endpoint, headers=learner).json() == {"alphabet": [], "basic": []}
+
+    def add_lesson(db, title, *, category="", letter=None, published=True):
+        lesson = models.VideoFile(
+            filename=f"{uuid4()}.mp4", title=title, object_name=f"{uuid4()}.mp4",
+            is_published=published,
+        )
+        db.add(lesson)
+        db.flush()
+        gesture = models.CatalogGesture(
+            id=str(uuid4()), lesson_id=lesson.lesson_id, version=1,
+            published_version=1 if published else None,
+        )
+        db.add(gesture)
+        db.flush()
+        media = models.CatalogMedia(
+            id=str(uuid4()), gesture_id=gesture.id, filename=lesson.filename, object_name=lesson.object_name,
+        )
+        db.add(media)
+        db.flush()
+        db.add(models.CatalogRevision(
+            gesture_id=gesture.id, version=1, title=title, description="",
+            media_id=media.id, action="publish" if published else "created",
+            review_status="approved" if published else "draft", review_note="",
+            category=category, source="Private source", consent_reference="Private consent",
+            learning_section="alphabet" if letter else "basic", alphabet_letter=letter,
+        ))
+        return lesson.lesson_id
+
+    with Session(engine) as db:
+        alphabet_ids = {
+            letter: add_lesson(db, title, letter=letter)
+            for letter, title in [("Ж", "Первый"), ("Ё", "Второй"), ("Е", "Третий")]
+        }
+        latter_category = add_lesson(db, "Астра", category="Животные")
+        latter_title = add_lesson(db, "Ёлка", category="Еда")
+        first_title = add_lesson(db, "ель", category="еда")
+        add_lesson(db, "Черновик", letter="А", published=False)
+        legacy = models.VideoFile(filename="legacy.mp4", object_name="old-object.mp4")
+        db.add(legacy)
+        db.flush()
+        legacy_id = legacy.lesson_id
+        db.commit()
+
+    response = client.get(endpoint, headers=learner)
+    assert response.status_code == 200 and response.headers["Cache-Control"] == "no-store"
+    sections = response.json()
+    assert [row["lesson_id"] for row in sections["alphabet"]] == [alphabet_ids[letter] for letter in "ЕЁЖ"]
+    assert [row["alphabet_letter"] for row in sections["alphabet"]] == list("ЕЁЖ")
+    assert [row["lesson_id"] for row in sections["basic"]] == [first_title, latter_title, latter_category, legacy_id]
+    for row in sections["alphabet"] + sections["basic"]:
+        assert row["is_learning_material"]
+        assert row["media_url"] == f"/videos/lessons/{row['lesson_id']}/content"
+        assert {"source", "consent_reference", "object_name"}.isdisjoint(row)

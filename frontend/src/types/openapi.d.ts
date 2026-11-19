@@ -397,6 +397,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/learning/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Получить уроки разделов «Алфавит» и «Базовые жесты»
+         * @description Доступно активному пользователю с подтверждённым email. Возвращает опубликованные уроки со стабильным UUID и ссылкой на видео приложения.
+         */
+        get: operations["list_sections_learning_sections_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/progress/complete/{word}": {
         parameters: {
             query?: never;
@@ -721,6 +741,11 @@ export interface components {
         /** CatalogCreate */
         CatalogCreate: {
             /**
+             * Alphabet Letter
+             * @description Russian letter required for the alphabet section.
+             */
+            alphabet_letter?: string | null;
+            /**
              * Category
              * @default
              */
@@ -743,6 +768,11 @@ export interface components {
              */
             gesture_id: string;
             /**
+             * Learning Section
+             * @description Default is basic for new drafts. Omit on edit to keep the existing placement.
+             */
+            learning_section?: ("alphabet" | "basic") | null;
+            /**
              * Source
              * @description Provenance of the current video
              * @default
@@ -753,6 +783,11 @@ export interface components {
         };
         /** CatalogEdit */
         CatalogEdit: {
+            /**
+             * Alphabet Letter
+             * @description Russian letter required for the alphabet section.
+             */
+            alphabet_letter?: string | null;
             /**
              * Category
              * @default
@@ -771,6 +806,11 @@ export interface components {
             description: string;
             /** Expected Version */
             expected_version: number;
+            /**
+             * Learning Section
+             * @description Default is basic for new drafts. Omit on edit to keep the existing placement.
+             */
+            learning_section?: ("alphabet" | "basic") | null;
             /**
              * Source
              * @description Provenance of the current video
@@ -806,6 +846,8 @@ export interface components {
         CatalogRevisionResponse: {
             /** Action */
             action: string;
+            /** Alphabet Letter */
+            alphabet_letter: string | null;
             /** Author Id */
             author_id: number | null;
             /** Category */
@@ -821,6 +863,11 @@ export interface components {
             description: string;
             /** Filename */
             filename: string | null;
+            /**
+             * Learning Section
+             * @enum {string}
+             */
+            learning_section: "alphabet" | "basic";
             /** Review Note */
             review_note: string;
             /**
@@ -886,6 +933,19 @@ export interface components {
             /** Lang */
             lang: string;
         };
+        /** LearningSectionsResponse */
+        LearningSectionsResponse: {
+            /**
+             * Alphabet
+             * @description Published lessons in Russian alphabetical order
+             */
+            alphabet: components["schemas"]["LessonResponse"][];
+            /**
+             * Basic
+             * @description Published lessons ordered by category, then title
+             */
+            basic: components["schemas"]["LessonResponse"][];
+        };
         /** LegacyProgress */
         LegacyProgress: {
             /** Attempts */
@@ -906,6 +966,11 @@ export interface components {
          * @description Published lesson contract independent of the internal object-store key.
          */
         LessonResponse: {
+            /**
+             * Alphabet Letter
+             * @description Russian letter for a published alphabet lesson
+             */
+            alphabet_letter?: string | null;
             /** Category */
             category?: string | null;
             /** Description */
@@ -2250,6 +2315,40 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+        };
+    };
+    list_sections_learning_sections_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LearningSectionsResponse"];
+                };
+            };
+            /** @description Аккаунт неактивен или email не подтверждён */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
