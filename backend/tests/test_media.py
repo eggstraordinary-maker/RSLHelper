@@ -121,7 +121,7 @@ def _row_count(engine):
         return db.scalar(select(func.count()).select_from(models.VideoFile))
 
 
-def test_valid_upload_has_private_random_key_and_public_uuid_contract(media_api):
+def test_legacy_upload_creates_private_draft_with_stable_uuids(media_api):
     client, engine, store, headers, _ = media_api
     response = _upload(client, headers, filename="C:\\unsafe\\nested\\gesture.mp4", content_type="application/octet-stream")
     assert response.status_code == 200, response.text
@@ -130,12 +130,13 @@ def test_valid_upload_has_private_random_key_and_public_uuid_contract(media_api)
     assert re.fullmatch(r"[0-9a-f]{32}\.mp4", saved["object_name"])
     assert store.objects[saved["object_name"]] == tiny_mp4_bytes()
     assert _row_count(engine) == 1
-    lessons = client.get("/videos/lessons")
-    assert lessons.status_code == 200
-    lesson = lessons.json()[0]
-    assert "object_name" not in lesson
-    assert lesson["media_url"] == f"/videos/lessons/{saved['lesson_id']}/content"
-    assert client.get("/videos/").json()[0]["object_name"] == saved["object_name"]
+    assert saved["is_published"] is False
+    draft = client.get(f"/admin/catalog/{saved['gesture_id']}", headers=headers).json()
+    assert "object_name" not in draft["revision"]
+    assert draft["lesson_id"] == saved["lesson_id"]
+    assert client.get("/videos/lessons").json() == []
+    assert client.get("/videos/").json() == []
+    assert client.get(f"/videos/lessons/{saved['lesson_id']}/content").status_code == 404
 
 
 def test_upload_roles_remain_enforced(media_api):
@@ -290,14 +291,10 @@ async def test_rollback_failure_keeps_compensation_and_errors_safe(monkeypatch, 
                 raise IntegrityError("commit", {}, Exception("DB password=must-not-appear"))
             raise OperationalError("commit", {}, Exception("DB password=must-not-appear"), connection_invalidated=True)
 
-    async def write(db, **kwargs):
-        if stage == "write":
-            raise IntegrityError("write", {}, Exception("DB password=must-not-appear"))
-        return object()
-
-    monkeypatch.setattr(repo, "add_lesson", write)
     with pytest.raises(MediaUnavailableError) as error:
-        await service.upload_lesson(BrokenTransaction(), io.BytesIO(tiny_mp4_bytes()), "test.mp4", "video/mp4", "Test")
+        async with service.video_upload(BrokenTransaction(), io.BytesIO(tiny_mp4_bytes()), "test.mp4", "video/mp4"):
+            if stage == "write":
+                raise IntegrityError("write", {}, Exception("DB password=must-not-appear"))
     assert bool(store.objects) is retained
     assert "must-not-appear" not in str(error.value) + caplog.text
 

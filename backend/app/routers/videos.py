@@ -17,7 +17,7 @@ from app.modules.catalog.errors import (
     InvalidRangeError, MediaNotFoundError, MediaTooLargeError,
     MediaUnavailableError, UnsupportedMediaError,
 )
-from app.schemas import LessonResponse, VideoResponse
+from app.schemas import LessonResponse, UserResponse, VideoResponse
 
 router = APIRouter(prefix="/videos", tags=["videos"])
 logger = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ def _lesson_response(lesson) -> LessonResponse:
         id=lesson.id, lesson_id=lesson.lesson_id, filename=lesson.filename,
         description=lesson.description, is_published=lesson.is_published,
         media_url=f"/videos/lessons/{lesson.lesson_id}/content",
+        title=lesson.title, category=lesson.category, gesture_id=lesson.gesture_id, version=lesson.version,
     )
 
 
@@ -36,20 +37,22 @@ def _legacy_response(lesson) -> VideoResponse:
         id=lesson.id, lesson_id=lesson.lesson_id, filename=lesson.filename,
         description=lesson.description, is_published=lesson.is_published,
         object_name=lesson.object_name,
+        gesture_id=lesson.gesture_id,
     )
 
 
 @router.post(
     "/upload", response_model=VideoResponse, deprecated=True,
-    summary="Загрузить проверенный MP4 урока",
-    description="Только администратор. MP4 с H.264: до 100 МБ (100 000 000 байт) и 15 секунд; настройки развёртывания могут уменьшить лимиты. Legacy-ответ содержит внутренний ключ; публичный каталог использует lesson_id.",
+    summary="Загрузить MP4 в черновик (совместимость)",
+    description="Только администратор. Создаёт черновик, который можно проверить и опубликовать из редактора каталога. "
+    "MP4 с H.264 до 100 МБ (100 000 000 байт) и 15 секунд. Для новых клиентов используйте /admin/catalog.",
     responses={413: {"description": "Превышен лимит размера"}, 415: {"description": "Недопустимый MP4"}, 503: {"description": "Хранилище или проверка временно недоступны"}},
 )
 async def upload_video(
     file: UploadFile = File(...),
     description: str = Form("", max_length=10000),
     db: AsyncSession = Depends(get_async_db),
-    _current_admin=Depends(get_current_admin_user),
+    current_admin: UserResponse = Depends(get_current_admin_user),
 ):
     # Authentication performed read-only queries in this request's session.
     # Release that transaction/connection before disk probing and S3 I/O.
@@ -59,7 +62,9 @@ async def upload_video(
         logger.warning("Media authentication transaction close failed (%s)", type(exc).__name__)
         raise HTTPException(status_code=503, detail="Video could not be saved") from None
     try:
-        lesson = await catalog.upload_lesson(db, file.file, file.filename, file.content_type, description)
+        lesson = await catalog.upload_lesson(
+            db, file.file, file.filename, file.content_type, description, author_id=current_admin.id,
+        )
         return _legacy_response(lesson)
     except MediaTooLargeError:
         raise HTTPException(status_code=413, detail="Video exceeds the upload size limit") from None
@@ -124,10 +129,10 @@ class _ClosingStreamingResponse(StreamingResponse):
                 await run_in_threadpool(self._owner.close)
 
 
-async def _content_response(request: Request, lesson, *, legacy: bool = False):
+async def media_response(request: Request, object_name: str, *, legacy: bool = False):
     try:
         media = await catalog.read_media(
-            lesson, range_header=request.headers.get("range"),
+            object_name, range_header=request.headers.get("range"),
             if_range=request.headers.get("if-range"), head=request.method == "HEAD",
         )
     except InvalidRangeError as exc:
@@ -160,12 +165,14 @@ async def _published_lesson(db: AsyncSession, lesson_id: UUID):
     responses={206: {"description": "Один диапазон байтов"}, 416: {"description": "Диапазон вне файла"}, 404: {"description": "Урок не опубликован или отсутствует"}},
 )
 async def lesson_content(lesson_id: UUID, request: Request, db: AsyncSession = Depends(get_async_db)):
-    return await _content_response(request, await _published_lesson(db, lesson_id))
+    lesson = await _published_lesson(db, lesson_id)
+    return await media_response(request, lesson.object_name)
 
 
 @router.head("/lessons/{lesson_id}/content", summary="Проверить метаданные MP4 без загрузки тела")
 async def lesson_content_head(lesson_id: UUID, request: Request, db: AsyncSession = Depends(get_async_db)):
-    return await _content_response(request, await _published_lesson(db, lesson_id))
+    lesson = await _published_lesson(db, lesson_id)
+    return await media_response(request, lesson.object_name)
 
 
 @router.get("/", response_model=list[VideoResponse], deprecated=True)
@@ -179,13 +186,14 @@ async def stream_video(request: Request, object_name: str, db: AsyncSession = De
         lesson = await catalog.get_legacy_lesson(db, object_name)
     except MediaNotFoundError:
         raise HTTPException(status_code=404, detail="Video not found") from None
-    return await _content_response(request, lesson, legacy=True)
+    return await media_response(request, lesson.object_name, legacy=True)
 
 
 @router.get("/{object_name:path}", deprecated=True)
-async def get_video(object_name: str, db: AsyncSession = Depends(get_async_db)):
+async def get_video(object_name: str, request: Request, db: AsyncSession = Depends(get_async_db)):
     try:
         lesson = await catalog.get_legacy_lesson(db, object_name)
-        return {"url": await catalog.legacy_url(lesson)}
+        # Route all new links through the publication check, including old clients.
+        return {"url": str(request.url_for("lesson_content", lesson_id=lesson.lesson_id))}
     except MediaNotFoundError:
         raise HTTPException(status_code=404, detail="Video not found") from None

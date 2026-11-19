@@ -4,7 +4,10 @@ from hashlib import sha256
 import secrets
 import uuid
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, UniqueConstraint, CheckConstraint, JSON, true
+from sqlalchemy import (
+    Boolean, CheckConstraint, Column, DateTime, ForeignKey, ForeignKeyConstraint,
+    Integer, JSON, String, Text, UniqueConstraint, false, true,
+)
 from sqlalchemy.sql import func
 
 from app.database import Base
@@ -90,12 +93,76 @@ class VideoFile(Base):
     is_published = Column(Boolean, nullable=False, default=True, server_default=true())
 
     filename = Column(String(255), nullable=False)
+    title = Column(String(200), nullable=True)
 
     description = Column(Text)
 
     object_name = Column(String(255), unique=True, index=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class CatalogGesture(Base):
+    """Stable catalog identity. video_files is the projection used by public lessons."""
+
+    __tablename__ = "catalog_gestures"
+    __table_args__ = (
+        CheckConstraint("version > 0", name="ck_catalog_gesture_version"),
+        CheckConstraint(
+            "published_version IS NULL OR (published_version BETWEEN 1 AND version AND NOT archived)",
+            name="ck_catalog_publication",
+        ),
+    )
+
+    id = Column(String(36), primary_key=True)
+    lesson_id = Column(String(36), ForeignKey("video_files.lesson_id", ondelete="CASCADE"), unique=True, nullable=False)
+    version = Column(Integer, nullable=False)
+    published_version = Column(Integer)
+    archived = Column(Boolean, nullable=False, default=False, server_default=false())
+
+
+class CatalogMedia(Base):
+    """One object can be shared by revisions of the same gesture."""
+
+    __tablename__ = "catalog_media"
+    __table_args__ = (UniqueConstraint("gesture_id", "id", name="uq_catalog_media_owner"),)
+
+    id = Column(String(36), primary_key=True)
+    gesture_id = Column(String(36), ForeignKey("catalog_gestures.id", ondelete="CASCADE"), nullable=False)
+    filename = Column(String(255), nullable=False)
+    object_name = Column(String(255), unique=True, nullable=False)
+    withdrawn_at = Column(DateTime(timezone=True))
+
+
+class CatalogRevision(Base):
+    """An immutable snapshot of content and moderation after one catalog action."""
+
+    __tablename__ = "catalog_revisions"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["gesture_id", "media_id"], ["catalog_media.gesture_id", "catalog_media.id"],
+            name="fk_catalog_revision_media_owner", ondelete="CASCADE",
+        ),
+        CheckConstraint("version > 0", name="ck_catalog_revision_version"),
+        CheckConstraint(
+            "review_status IN ('draft', 'approved', 'changes_requested')",
+            name="ck_catalog_review_status",
+        ),
+    )
+
+    gesture_id = Column(String(36), ForeignKey("catalog_gestures.id", ondelete="CASCADE"), primary_key=True)
+    version = Column(Integer, primary_key=True)
+    media_id = Column(String(36))
+    title = Column(String(200), nullable=False)
+    description = Column(Text, nullable=False)
+    category = Column(String(100), nullable=False)
+    source = Column(String(500), nullable=False)
+    consent_reference = Column(String(500), nullable=False)
+    review_status = Column(String(20), nullable=False)
+    review_note = Column(String(2000), nullable=False)
+    action = Column(String(24), nullable=False)
+    author_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class UserLearningProgress(Base):

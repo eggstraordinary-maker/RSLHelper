@@ -4,7 +4,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.routers import auth, users, language, videos, progress, admin, recognition
+from app.routers import auth, users, language, videos, progress, admin, admin_catalog, recognition
 from app.middleware.language_middleware import LanguageMiddleware
 from app.middleware.upload_body_limit import UploadBodyLimitMiddleware
 from app.config import settings
@@ -78,6 +78,7 @@ app.include_router(language.router)
 app.include_router(videos.router)
 app.include_router(progress.router)
 app.include_router(admin.router)
+app.include_router(admin_catalog.router)
 app.include_router(recognition.router)
 
 @app.get("/")

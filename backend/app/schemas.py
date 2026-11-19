@@ -162,12 +162,20 @@ class LegacyProgress(BaseModel):
     def completed_at_in_utc(cls, value: datetime | None) -> datetime | None:
         return UserProgress.completed_at_in_utc(value)
 
+class UnavailableLessonProgress(UserProgressBase):
+    model_config = ConfigDict(from_attributes=True)
+    lesson_id: str
+
+
 class ProgressStats(BaseModel):
     total_lessons: int
     completed_lessons: int
     completed_percentage: float
     recent_lessons: list[str]
     unresolved_legacy_records: int = 0
+    unavailable_lessons: list[UnavailableLessonProgress] = Field(
+        default_factory=list, description="Own saved progress for lessons no longer available for playback",
+    )
 
 
 class VideoResponse(BaseModel):
@@ -178,6 +186,7 @@ class VideoResponse(BaseModel):
     description: str | None
     object_name: str | None
     is_published: bool
+    gesture_id: str | None = None
 
 
 class LessonResponse(BaseModel):
@@ -189,3 +198,8 @@ class LessonResponse(BaseModel):
     description: str | None
     is_published: bool
     media_url: str = Field(description="Relative API URL of the published MP4")
+    title: str | None = None
+    category: str | None = None
+    gesture_id: str | None = None
+    version: int | None = None
+    is_learning_material: bool = Field(default=True, description="A learning example without an integrated model class")

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import case, delete, func, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +41,18 @@ async def legacy_rows(db: AsyncSession, user_id: int):
     ).all()
 
 
+async def unavailable_progress(db: AsyncSession, user_id: int):
+    return (await db.scalars(
+        select(UserLearningProgress)
+        .join(VideoFile, UserLearningProgress.lesson_id == VideoFile.lesson_id)
+        .where(
+            UserLearningProgress.user_id == user_id,
+            or_(VideoFile.is_published.is_(False), VideoFile.object_name.is_(None)),
+        )
+        .order_by(UserLearningProgress.id)
+    )).all()
+
+
 async def stats_snapshot(
     db: AsyncSession, user_id: int
 ) -> tuple[int, int, list[str], int]:
@@ -64,7 +76,7 @@ async def stats_snapshot(
         await db.scalars(
             select(
                 func.coalesce(
-                    func.nullif(VideoFile.description, ""), VideoFile.filename
+                    func.nullif(VideoFile.title, ""), func.nullif(VideoFile.description, ""), VideoFile.filename
                 )
             )
             .select_from(UserLearningProgress)

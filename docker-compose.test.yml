@@ -86,7 +86,7 @@ services:
         condition: service_healthy
       seaweedfs-tests:
         condition: service_healthy
-    command: python -m pytest tests/test_media_storage_integration.py -q
+    command: python -m pytest tests/test_media_storage_integration.py tests/test_catalog_integration.py -q
     profiles: [test]
 
   e2e-backend:
