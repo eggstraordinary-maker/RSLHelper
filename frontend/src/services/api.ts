@@ -1,5 +1,6 @@
 import type {
   LoginResponse,
+  LearningSections,
   MessageResponse,
   ProgressStats,
   RegisterResponse,
@@ -107,6 +108,13 @@ export const progressApi = {
     const { data } = await apiClient.put<UserProgress>(
       `/progress/lessons/${encodeURIComponent(lessonId)}/completion`,
     );
+    return data;
+  },
+};
+
+export const learningApi = {
+  async sections(signal: AbortSignal): Promise<LearningSections> {
+    const { data } = await apiClient.get<LearningSections>('/learning/sections', { signal });
     return data;
   },
 };

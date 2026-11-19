@@ -24,6 +24,8 @@ export function CatalogHistory({ id, published, disabled, onPreview, onWithdraw 
     return [
       ['category', revision.category], ['description', revision.description], ['source', revision.source],
       ['consent_reference', revision.consent_reference], ['video', revision.filename],
+      ['learning_section', i18n.t(`sections.${revision.learning_section}`, { ns: 'learning' })],
+      ['alphabet_letter', revision.alphabet_letter],
     ] as const;
   }
   return <section className={panelClass}>

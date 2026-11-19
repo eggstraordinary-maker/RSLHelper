@@ -6,8 +6,10 @@ import { videosApi } from '../services/api';
 
 export default function Dictionary() {
   const { t } = useTranslation('dictionary');
-  const { videos, status, selectedId, reload, selectLesson } = useDictionaryCatalog();
-  const selected = videos.find(video => video.lesson_id === selectedId);
+  const {
+    videos, status, selectedId, reload, selectLesson, results, query, category, categories, setQuery, setCategory, clearSearch,
+  } = useDictionaryCatalog();
+  const selected = results.find(video => video.lesson_id === selectedId) ?? results[0];
   const selectedLabelId = useId();
 
   return (
@@ -26,9 +28,30 @@ export default function Dictionary() {
       {status === 'ready' && videos.length === 0 && (
         <p role="status" className="py-8 text-center text-gray-600">{t('emptyCatalog')}</p>
       )}
+      {videos.length > 0 && <div className="flex flex-wrap items-end gap-3">
+        <label className="block min-w-0 flex-1 basis-64 text-sm font-medium">
+          {t('searchLabel')}
+          <input type="search" value={query} onChange={event => setQuery(event.target.value)}
+            className="mt-1 block w-full rounded-md border bg-white px-3 py-2" />
+        </label>
+        {categories.length > 0 && <label className="block min-w-0 max-w-full text-sm font-medium">
+          {t('categoryFilter')}
+          <select value={category} onChange={event => setCategory(event.target.value)}
+            className="mt-1 block max-w-full rounded-md border bg-white px-3 py-2">
+            <option value="">{t('allCategories')}</option>
+            {categories.map(value => <option key={value} value={value}>{value}</option>)}
+          </select>
+        </label>}
+        {(query || category) && <button type="button" onClick={clearSearch} className="rounded-md border bg-white px-3 py-2">
+          {t('clearFilters')}
+        </button>}
+      </div>}
+      {status === 'ready' && videos.length > 0 && results.length === 0 && (
+        <p role="status" className="py-8 text-center text-gray-600">{t('noMatches')}</p>
+      )}
       {selected && (
         <div className="grid grid-cols-1 xl:grid-cols-[auto_minmax(0,1fr)] gap-4 lg:gap-6">
-          <LeftTOC title={t('contents')} items={videos.map(video => ({ id: video.lesson_id, label: lessonLabel(video) }))}
+          <LeftTOC title={t('contents')} items={results.map(video => ({ id: video.lesson_id, label: lessonLabel(video) }))}
             active={selected.lesson_id} onSelect={selectLesson} />
           <div className="space-y-4 min-w-0">
             <LessonMedia key={`${selected.lesson_id}:${selected.version}:${selected.media_url}`} src={videosApi.streamUrl(selected.media_url)} />

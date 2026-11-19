@@ -8,12 +8,17 @@ import ruCommon from '../src/locales/ru/common.json';
 import enCommon from '../src/locales/en/common.json';
 import ruAdmin from '../src/locales/ru/admin.json';
 import enAdmin from '../src/locales/en/admin.json';
+import ruLearning from '../src/locales/ru/learning.json';
+import enLearning from '../src/locales/en/learning.json';
 
 export const accountStrings = { ru, en };
 export async function accountWrapper(language: 'ru' | 'en' = 'ru') {
   const i18n = createInstance();
   await i18n.use(initReactI18next).init({ lng: language, fallbackLng: 'ru', defaultNS: 'common',
-    resources: { ru: { auth: ru, common: ruCommon, admin: ruAdmin }, en: { auth: en, common: enCommon, admin: enAdmin } },
+    resources: {
+      ru: { auth: ru, common: ruCommon, admin: ruAdmin, learning: ruLearning },
+      en: { auth: en, common: enCommon, admin: enAdmin, learning: enLearning },
+    },
     interpolation: { escapeValue: false },
   });
   return function Wrapper({ children }: { children: React.ReactNode }) {

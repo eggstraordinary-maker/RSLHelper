@@ -9,7 +9,7 @@ const fixture = JSON.parse(readFileSync(resolve('../.local-test-artifacts/e2e-fi
 const password = process.env.RSL_E2E_PASSWORD;
 if (!password) throw new Error('RSL_E2E_PASSWORD is required for browser login');
 
-test('admin catalog creates, previews and publishes a clip, then preserves progress after archive', async ({ page }) => {
+test('publish an alphabet lesson, find it in the dictionary and retain progress after archive', async ({ page }) => {
   const api = 'http://localhost:8000';
   const title = `E2E catalog ${fixture.run_id}`;
   const name = `e2e_${fixture.run_id}`;
@@ -22,7 +22,10 @@ test('admin catalog creates, previews and publishes a clip, then preserves progr
   await expect(page).toHaveURL(/\/admin\/catalog\?new=1$/);
   await page.getByLabel('Название жеста').fill(title);
   await page.getByLabel('Описание и инструкция').fill('Repeat the synthetic example');
-  await page.getByLabel('Категория', { exact: true }).fill('E2E');
+  await page.getByLabel('Категория', { exact: true }).fill('Тестовые буквы');
+  await page.getByLabel('Учебный раздел').selectOption('alphabet');
+  await expect(page.getByRole('button', { name: 'Создать черновик' })).toBeDisabled();
+  await page.getByLabel('Буква алфавита').selectOption('Ё');
   await page.getByRole('button', { name: 'Создать черновик' }).click();
   await expect(page).toHaveURL(/\/admin\/catalog\?gesture=[0-9a-f-]+$/);
   const editor = page.url();
@@ -58,14 +61,31 @@ test('admin catalog creates, previews and publishes a clip, then preserves progr
   await expect(page.getByText('В словаре доступна версия 5.', { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('link', { name: 'Словарь', exact: true }).click();
+  const search = page.getByRole('searchbox', { name: 'Поиск по названию или категории' });
+  await search.fill('тестовые буквы');
+  const dictionary = page.getByRole('complementary', { name: 'Оглавление' });
+  await expect(dictionary.getByRole('button')).toHaveCount(1);
+  await expect(dictionary.getByRole('button', { name: title, exact: true })).toBeVisible();
+  await search.fill('публикация отсутствует');
+  await expect(page.getByText('По вашему запросу жесты не найдены.')).toBeVisible();
+  await page.getByRole('button', { name: 'Сбросить поиск и фильтры' }).click();
+  await search.fill(title.toUpperCase());
   await page.getByRole('button', { name: title, exact: true }).click();
-  await expect(page.getByText('Категория · E2E', { exact: true })).toBeVisible();
+  await expect(page.getByText('Категория · Тестовые буквы', { exact: true })).toBeVisible();
   await expect(page.getByText('Учебный материал', { exact: true })).toBeVisible();
   const publicVideo = page.getByLabel('Эталонный жест');
   await expect(publicVideo).toHaveAttribute('src', /\/videos\/lessons\/[0-9a-f-]+\/content$/);
   const publicUrl = (await publicVideo.getAttribute('src'))!;
   await page.getByRole('link', { name: 'Обучение', exact: true }).click();
-  await page.getByRole('button', { name: title, exact: true }).click();
+  const sectionNav = page.getByRole('navigation', { name: 'Разделы обучения' });
+  await expect(sectionNav.getByRole('link', { name: 'Базовые жесты' })).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('button', { name: `E2E practice ${fixture.run_id}`, exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: `Ё · ${title}`, exact: true })).toHaveCount(0);
+  await sectionNav.getByRole('link', { name: 'Алфавит' }).click();
+  await page.getByRole('button', { name: `Ё · ${title}`, exact: true }).click();
+  await expect(page).toHaveURL(/\/learning\?section=alphabet&lesson=[0-9a-f-]+$/);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: `Ё · ${title}`, exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Я повторил(а) жест', exact: true }).click();
   await expect(page.getByText('Самостоятельная практика сохранена.', { exact: true })).toBeVisible();
 

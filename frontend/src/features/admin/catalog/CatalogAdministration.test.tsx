@@ -53,6 +53,30 @@ afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 afterAll(() => mock.restore());
 
 describe('administrator catalog', () => {
+  it('requires a letter for the alphabet and clears the letter when moving to basic signs', async () => {
+    await edit();
+    const section = screen.getByLabelText(strings.fields.learning_section) as HTMLSelectElement;
+    expect(section.value).toBe('basic');
+    change(strings.fields.learning_section, 'alphabet');
+    expect((screen.getByRole('button', { name: strings.save }) as HTMLButtonElement).disabled).toBe(true);
+    change(strings.fields.alphabet_letter, 'Ё');
+    mock.onPut(url).replyOnce(200, gesture({ version: 2, learning_section: 'alphabet', alphabet_letter: 'Ё' }));
+    click(strings.save);
+    await screen.findByText(strings.saved);
+    expect(JSON.parse(mock.history.put[0].data)).toMatchObject({
+      expected_version: 1, learning_section: 'alphabet', alphabet_letter: 'Ё',
+    });
+    expect((screen.getByLabelText(strings.fields.alphabet_letter) as HTMLSelectElement).value).toBe('Ё');
+    change(strings.fields.learning_section, 'basic');
+    expect(screen.queryByLabelText(strings.fields.alphabet_letter)).toBeNull();
+    mock.onPut(url).replyOnce(200, gesture({ version: 3 }));
+    click(strings.save);
+    await screen.findByText('Черновик · Версия 3');
+    expect(JSON.parse(mock.history.put[1].data)).toMatchObject({
+      expected_version: 2, learning_section: 'basic', alphabet_letter: null,
+    });
+  });
+
   it('distinguishes loading, retry, an empty list and denied access', async () => {
     const request = deferred();
     mock.onGet(base).reply(() => request.promise);

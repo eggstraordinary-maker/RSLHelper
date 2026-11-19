@@ -1,12 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import LeftTOC from '../components/LeftTOC';
 import CameraView from '../components/CameraView';
 import { useAuth } from '../contexts/AuthContext';
 import { progressApi, videosApi } from '../services/api';
-import { getApiErrorMessage, getSessionRevision } from '../services/apiClient';
-import { acknowledgePracticeAttempt, beginPracticeAttempt } from '../features/learning';
-import { LessonDetails, lessonLabel } from '../features/catalog';
-import type { UserProgress, VideoInfo } from '../types/api';
+import { getSessionRevision } from '../services/apiClient';
+import { acknowledgePracticeAttempt, beginPracticeAttempt, useLearningSections } from '../features/learning';
+import { LessonDetails, LessonMedia, lessonLabel } from '../features/catalog';
+import type { LearningSection, UserProgress, VideoInfo } from '../types/api';
+
+const sectionIds = ['alphabet', 'basic'] as const;
+const studyLabel = (lesson: VideoInfo) => {
+  const label = lessonLabel(lesson);
+  return lesson.alphabet_letter && lesson.alphabet_letter !== label ? `${lesson.alphabet_letter} · ${label}` : label;
+};
 
 export default function Learning() {
   const { user } = useAuth();
@@ -14,21 +22,21 @@ export default function Learning() {
 }
 
 function LearningSession() {
+  const { t } = useTranslation('learning');
   const { completeLesson, user } = useAuth();
-  const [videos, setVideos] = useState<VideoInfo[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [listError, setListError] = useState<string | null>(null);
-  const [catalogRetry, setCatalogRetry] = useState(0);
+  const [params, setParams] = useSearchParams();
+  const section: LearningSection = params.get('section') === 'alphabet' ? 'alphabet' : 'basic';
+  const { data, status, reload } = useLearningSections();
+  const lessons = data?.[section] ?? [];
+  const selected = lessons.find(lesson => lesson.lesson_id === params.get('lesson')) ?? lessons[0];
+  const selectedId = selected?.lesson_id;
+  const selectLesson = (lesson: string) => setParams({ section, lesson });
   const [progressRetry, setProgressRetry] = useState(0);
   const [progressLoading, setProgressLoading] = useState(true);
-  const [progressError, setProgressError] = useState<string | null>(null);
+  const [progressError, setProgressError] = useState(false);
   const [progress, setProgress] = useState<Record<string, UserProgress>>({});
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ lessonId: string; text: string; error: boolean } | null>(null);
-  const [videoLoading, setVideoLoading] = useState(true);
-  const [videoError, setVideoError] = useState(false);
-  const [videoRetry, setVideoRetry] = useState(0);
+  const [notice, setNotice] = useState<{ lessonId: string; key: string; error: boolean } | null>(null);
   const mounted = useRef(false);
   const saveInFlight = useRef(false);
 
@@ -39,37 +47,17 @@ function LearningSession() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setListError(null);
-    void videosApi.list().then(data => {
-      if (cancelled) return;
-      setVideos(data);
-      setSelectedId(previous => data.some(v => v.lesson_id === previous) ? previous : data[0]?.lesson_id || '');
-    }).catch(error => {
-      if (!cancelled) setListError(getApiErrorMessage(error, 'Не удалось загрузить уроки'));
-    }).finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [catalogRetry]);
-
-  useEffect(() => {
-    let cancelled = false;
     setProgressLoading(true);
-    setProgressError(null);
+    setProgressError(false);
     void progressApi.list().then(data => {
       if (!cancelled) setProgress(Object.fromEntries(data.map(row => [row.lesson_id, row])));
-    }).catch(error => {
-      if (!cancelled) setProgressError(getApiErrorMessage(error, 'Не удалось загрузить прогресс'));
+    }).catch(() => {
+      if (!cancelled) setProgressError(true);
     }).finally(() => { if (!cancelled) setProgressLoading(false); });
     return () => { cancelled = true; };
   }, [progressRetry]);
 
-  const selected = videos.find(v => v.lesson_id === selectedId);
-  const lessonProgress = progress[selectedId];
-
-  useEffect(() => {
-    setVideoLoading(true);
-    setVideoError(false);
-  }, [selectedId, selected?.version, videoRetry]);
+  const lessonProgress = selectedId ? progress[selectedId] : undefined;
 
   const savePractice = async (complete: boolean) => {
     if (!selected || !user || saveInFlight.current || progressLoading || progressError) return;
@@ -94,11 +82,11 @@ function LearningSession() {
             completed_at: current?.completed_at ?? saved.completed_at,
           } };
         });
-        setNotice({ lessonId, error: false, text: complete ? 'Урок отмечен пройденным.' : 'Самостоятельная практика сохранена.' });
+        setNotice({ lessonId, error: false, key: complete ? 'completionSaved' : 'practiceSaved' });
       }
-    } catch (error) {
+    } catch {
       if (mounted.current && getSessionRevision() === sessionRevision) {
-        setNotice({ lessonId, error: true, text: getApiErrorMessage(error, 'Не удалось сохранить прогресс. Повторите попытку.') });
+        setNotice({ lessonId, error: true, key: 'saveError' });
       }
     } finally {
       saveInFlight.current = false;
@@ -106,47 +94,55 @@ function LearningSession() {
     }
   };
 
-  if (loading) return <div role="status" className="py-8 text-center">Загрузка уроков…</div>;
-  if (listError) return <div role="alert" className="rounded border p-4 text-red-700">{listError}
-    <button className="ml-3 underline" onClick={() => setCatalogRetry(value => value + 1)}>Повторить загрузку уроков</button>
-  </div>;
-  if (!selected) return <div className="py-8 text-center text-gray-500">Уроков пока нет. Загляните позже.</div>;
-
-  return <div className="grid grid-cols-1 gap-4 xl:grid-cols-[auto_1fr]">
-    <LeftTOC items={videos.map(v => ({ id: v.lesson_id, label: lessonLabel(v) }))} active={selectedId} onSelect={setSelectedId} />
-    <div className="space-y-4">
-      <div className="rounded-lg border bg-white p-4">
-        <h3 className="text-lg font-semibold [overflow-wrap:anywhere]">{lessonLabel(selected)}</h3>
-        <LessonDetails lesson={selected} />
-        {selected.title && selected.description && selected.title !== selected.description && <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]">{selected.description}</p>}
-        <p className="mt-2 text-sm text-gray-600">Посмотрите эталонный клип, повторите жест и сохраните самостоятельную практику. Завершение урока — ваша отметка, автоматическая оценка модели сейчас недоступна.</p>
-      </div>
-      {videoLoading && !videoError && <p role="status">Загрузка эталонного видео…</p>}
-      <video key={`${selectedId}:${selected.version}:${videoRetry}`} src={videosApi.streamUrl(selected.media_url)} controls playsInline
-        aria-label="Эталонный жест" className="w-full rounded-lg border"
-        onLoadedData={() => setVideoLoading(false)} onError={() => { setVideoLoading(false); setVideoError(true); }} />
-      {videoError && <div role="alert" className="rounded border p-4 text-red-700">Не удалось загрузить эталонное видео.
-        <button className="ml-3 underline" onClick={() => setVideoRetry(value => value + 1)}>Повторить загрузку видео</button>
-      </div>}
-      <CameraView />
-      <section className="rounded-lg border bg-white p-4" aria-label="Самостоятельная практика">
-        <h4 className="font-semibold">Самостоятельная практика</h4>
-        {progressLoading ? <p role="status">Загрузка прогресса…</p> : <>
-          <p className="mt-2">Повторений сохранено: <strong>{lessonProgress?.attempts || 0}</strong></p>
-          <p>{lessonProgress?.completed ? 'Урок пройден по вашей отметке.' : 'Урок ещё не отмечен пройденным.'}</p>
-        </>}
-        {progressError && <div role="alert" className="mt-2 text-red-700">{progressError}
-          <button className="ml-3 underline" onClick={() => setProgressRetry(value => value + 1)}>Повторить загрузку прогресса</button>
-        </div>}
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button onClick={() => void savePractice(false)} disabled={saving || progressLoading || !!progressError}
-            className="rounded bg-indigo-600 px-3 py-2 text-white disabled:opacity-50">Я повторил(а) жест</button>
-          <button onClick={() => void savePractice(true)} disabled={saving || progressLoading || !!progressError || !lessonProgress?.attempts || lessonProgress.completed}
-            className="rounded border px-3 py-2 disabled:opacity-50">Отметить урок пройденным</button>
-        </div>
-        {saving && <p role="status" className="mt-2">Сохранение…</p>}
-        {notice?.lessonId === selectedId && <p role={notice.error ? 'alert' : 'status'} className={`mt-2 ${notice.error ? 'text-red-700' : 'text-green-700'}`}>{notice.text}</p>}
-      </section>
+  return <div className="space-y-4 min-w-0">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <nav aria-label={t('sectionNavigation')} className="flex flex-wrap gap-2">
+        {sectionIds.map(id => <Link key={id} to={`/learning?section=${id}`} aria-current={id === section ? 'page' : undefined}
+          className={`rounded-md border px-3 py-2 focus-visible:outline-2 focus-visible:outline-indigo-600 ${id === section ? 'border-indigo-500 bg-indigo-50 font-medium text-indigo-800' : 'bg-white'}`}>
+          {t(`sections.${id}`)}
+        </Link>)}
+      </nav>
+      <button type="button" disabled={status === 'loading'} onClick={reload}
+        className="rounded-md border bg-white px-3 py-2 disabled:opacity-50">
+        {t(status === 'error' ? 'retryCatalog' : 'refreshCatalog')}
+      </button>
     </div>
+    {status === 'loading' && <p role="status">{t('loadingCatalog')}</p>}
+    {status === 'error' && <p role="alert" className="rounded bg-red-50 p-4 text-red-800">{t('catalogError')}</p>}
+    {status === 'ready' && !selected && <p role="status" className="py-8 text-center text-gray-600">{t('emptySection')}</p>}
+    {selected && <div className="grid grid-cols-1 gap-4 xl:grid-cols-[auto_minmax(0,1fr)]">
+      <LeftTOC title={t('contents')} items={lessons.map(lesson => ({ id: lesson.lesson_id, label: studyLabel(lesson) }))}
+        active={selectedId} onSelect={selectLesson} />
+      <div className="space-y-4 min-w-0">
+        <div className="rounded-lg border bg-white p-4">
+          <h2 className="text-lg font-semibold [overflow-wrap:anywhere]">{studyLabel(selected)}</h2>
+          <LessonDetails lesson={selected} />
+          {selected.title && selected.description && selected.title !== selected.description && (
+            <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]">{selected.description}</p>
+          )}
+          <p className="mt-2 text-sm text-gray-600">{t('practiceInstructions')}</p>
+        </div>
+        <LessonMedia key={`${selected.lesson_id}:${selected.version}:${selected.media_url}`} src={videosApi.streamUrl(selected.media_url)} />
+        <CameraView />
+        <section className="rounded-lg border bg-white p-4" aria-label={t('practiceTitle')}>
+          <h3 className="font-semibold">{t('practiceTitle')}</h3>
+          {progressLoading ? <p role="status">{t('loadingProgress')}</p> : <>
+            <p className="mt-2">{t('attempts')} <strong>{lessonProgress?.attempts || 0}</strong></p>
+            <p>{t(lessonProgress?.completed ? 'completed' : 'inProgress')}</p>
+          </>}
+          {progressError && <div role="alert" className="mt-2 text-red-700">{t('progressError')}
+            <button className="ml-3 underline" onClick={() => setProgressRetry(value => value + 1)}>{t('retryProgress')}</button>
+          </div>}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button onClick={() => void savePractice(false)} disabled={saving || progressLoading || progressError}
+              className="rounded bg-indigo-600 px-3 py-2 text-white disabled:opacity-50">{t('recordPractice')}</button>
+            <button onClick={() => void savePractice(true)} disabled={saving || progressLoading || progressError || !lessonProgress?.attempts || lessonProgress.completed}
+              className="rounded border px-3 py-2 disabled:opacity-50">{t('completeLesson')}</button>
+          </div>
+          {saving && <p role="status" className="mt-2">{t('saving')}</p>}
+          {notice && notice.lessonId === selectedId && <p role={notice.error ? 'alert' : 'status'} className={`mt-2 ${notice.error ? 'text-red-700' : 'text-green-700'}`}>{t(notice.key)}</p>}
+        </section>
+      </div>
+    </div>}
   </div>;
 }

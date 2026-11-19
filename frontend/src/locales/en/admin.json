@@ -27,6 +27,7 @@
     "publishedVersion": "Revision {{version}} is available in the dictionary.",
     "activePublication": "Now in the dictionary",
     "metadata": "Sign details",
+    "chooseLetter": "Choose a letter",
     "videoRules": "One MP4 (H.264) file, up to 100 MB and 15 seconds. After upload, enter the source and consent for the new video.",
     "noVideo": "No video has been uploaded yet.",
     "withdrawn": "Consent withdrawn",
@@ -61,6 +62,8 @@
       "title": "Sign name",
       "description": "Description and instructions",
       "category": "Category",
+      "learning_section": "Learning section",
+      "alphabet_letter": "Alphabet letter",
       "source": "Video source",
       "consent_reference": "Consent reference",
       "video": "Example video"

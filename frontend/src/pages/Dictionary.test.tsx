@@ -60,6 +60,30 @@ describe('Dictionary catalog', () => {
     expect(mock.history.get).toHaveLength(1);
   });
 
+  it('searches Cyrillic titles and categories and distinguishes no results from an empty catalog', async () => {
+    const catalog = [
+      { ...lessons[0], title: 'Ёлка', category: 'Природа', description: 'Инструкция для жеста' },
+      { ...lessons[1], title: 'Привет', category: 'Общение' },
+    ];
+    mock.onGet('/videos/lessons').reply(200, catalog);
+    renderDictionary();
+    const search = await screen.findByRole('searchbox', { name: ru.searchLabel });
+    fireEvent.click(screen.getByRole('button', { name: 'Привет' }));
+    fireEvent.change(search, { target: { value: '  ЕЛКА  ' } });
+    expect(choices().map(choice => choice.textContent)).toEqual(['Ёлка']);
+    expect(video().src).toBe(buildApiUrl(lessons[0].media_url));
+
+    fireEvent.change(search, { target: { value: 'ПРИРОДА' } });
+    expect(choices().map(choice => choice.textContent)).toEqual(['Ёлка']);
+    fireEvent.change(screen.getByRole('combobox', { name: ru.categoryFilter }), { target: { value: 'Общение' } });
+    expect(screen.getByText(ru.noMatches)).toBeTruthy();
+    expect(screen.queryByText(ru.emptyCatalog)).toBeNull();
+    expect(screen.queryByLabelText(ru.videoLabel)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: ru.clearFilters }));
+    expect(video().src).toBe(buildApiUrl(lessons[1].media_url));
+    expect(mock.history.get).toHaveLength(1);
+  });
+
   it('distinguishes pending from empty and disables repeated list requests', async () => {
     const pending = deferredReply();
     mock.onGet('/videos/lessons').reply(() => pending.promise);
