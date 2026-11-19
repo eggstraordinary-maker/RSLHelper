@@ -18,6 +18,7 @@ const url = `${base}/${id}`;
 const mock = new MockAdapter(apiClient);
 const initial: CatalogRevision = {
   version: 1, title: 'Привет', description: '', category: '', source: '', consent_reference: '',
+  learning_section: 'basic', alphabet_letter: null,
   filename: null, video_withdrawn: false, review_status: 'draft', review_note: '', action: 'created',
   author_id: 7, created_at: '2026-11-19T00:00:00Z',
 };

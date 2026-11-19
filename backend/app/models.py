@@ -11,6 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.sql import func
 
 from app.database import Base
+from app.modules.catalog.dto import RUSSIAN_ALPHABET
 
 
 class UserRole(str, Enum):
@@ -148,6 +149,12 @@ class CatalogRevision(Base):
             "review_status IN ('draft', 'approved', 'changes_requested')",
             name="ck_catalog_review_status",
         ),
+        CheckConstraint(
+            "(learning_section = 'basic' AND alphabet_letter IS NULL) OR "
+            "(learning_section = 'alphabet' AND alphabet_letter IS NOT NULL AND "
+            f"alphabet_letter IN ({', '.join(repr(letter) for letter in RUSSIAN_ALPHABET)}))",
+            name="ck_catalog_learning_placement",
+        ),
     )
 
     gesture_id = Column(String(36), ForeignKey("catalog_gestures.id", ondelete="CASCADE"), primary_key=True)
@@ -156,6 +163,8 @@ class CatalogRevision(Base):
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
     category = Column(String(100), nullable=False)
+    learning_section = Column(String(8), nullable=False, server_default="basic")
+    alphabet_letter = Column(String(1))
     source = Column(String(500), nullable=False)
     consent_reference = Column(String(500), nullable=False)
     review_status = Column(String(20), nullable=False)

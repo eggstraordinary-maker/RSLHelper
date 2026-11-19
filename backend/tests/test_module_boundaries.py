@@ -13,7 +13,7 @@ def syntax(path):
     return ast.parse(path.read_text(encoding="utf-8-sig"), filename=str(path))
 
 
-@pytest.mark.parametrize("name", ["auth", "users", "admin", "progress"])
+@pytest.mark.parametrize("name", ["auth", "users", "admin", "progress", "learning"])
 def test_migrated_routers_have_no_sql_or_orm_queries(name):
     tree = syntax(APP / "routers" / f"{name}.py")
     for node in ast.walk(tree):

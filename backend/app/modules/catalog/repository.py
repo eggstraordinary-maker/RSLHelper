@@ -8,7 +8,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CatalogGesture, CatalogMedia, CatalogRevision, VideoFile
-from .dto import DraftFields, GestureRecord, LessonRecord, RevisionRecord, ReviewStatus, UploadedVideo
+from .dto import DraftFields, GestureRecord, LearningSection, LessonRecord, RevisionRecord, ReviewStatus, UploadedVideo
 
 
 class EditingState(NamedTuple):
@@ -18,18 +18,25 @@ class EditingState(NamedTuple):
     media: CatalogMedia | None
 
 
-def _record(row: VideoFile, gesture_id: str | None, category: str | None, version: int | None) -> LessonRecord:
+def _record(
+    row: VideoFile, gesture_id: str | None, category: str | None, version: int | None,
+    learning_section: LearningSection | None, alphabet_letter: str | None,
+) -> LessonRecord:
     return LessonRecord(
         id=row.id, lesson_id=row.lesson_id, filename=row.filename,
         description=row.description, object_name=row.object_name,
         is_published=row.is_published,
         title=row.title, category=category or None, gesture_id=gesture_id, version=version,
+        learning_section=learning_section or "basic", alphabet_letter=alphabet_letter,
     )
 
 
 def _published():
     return (
-        select(VideoFile, CatalogGesture.id, CatalogRevision.category, CatalogRevision.version)
+        select(
+            VideoFile, CatalogGesture.id, CatalogRevision.category, CatalogRevision.version,
+            CatalogRevision.learning_section, CatalogRevision.alphabet_letter,
+        )
         .outerjoin(CatalogGesture, CatalogGesture.lesson_id == VideoFile.lesson_id)
         .outerjoin(CatalogRevision, and_(
             CatalogRevision.gesture_id == CatalogGesture.id,
@@ -71,6 +78,7 @@ def revision_record(revision: CatalogRevision, media: CatalogMedia | None) -> Re
         filename=media.filename if media else None, video_withdrawn=bool(media and media.withdrawn_at),
         review_status=revision.review_status, review_note=revision.review_note, action=revision.action,
         author_id=revision.author_id, created_at=created_at.astimezone(timezone.utc),
+        learning_section=revision.learning_section, alphabet_letter=revision.alphabet_letter,
     )
 
 

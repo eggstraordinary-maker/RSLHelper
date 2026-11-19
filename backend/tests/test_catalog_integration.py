@@ -37,9 +37,9 @@ async def action(client, admin, url, record, name, **extra):
     })
 
 
-async def edit(client, admin, url, record, title):
+async def edit(client, admin, url, record, title, **placement):
     response = await client.put(url, headers=admin, json={
-        "expected_version": record["revision"]["version"], **fields(title),
+        "expected_version": record["revision"]["version"], **fields(title), **placement,
     })
     assert response.status_code == 200
     return response.json()
@@ -81,6 +81,8 @@ async def test_revisions_keep_one_visible_video_and_archiving_keeps_progress(rea
     filled = await edit(client, admin, url, record, "First title")
     assert (await action(client, admin, url, filled, "publish")).json()["detail"]["code"] == "review_required"
     first = await publish(client, admin, url, filled)
+    sections = (await client.get("/learning/sections", headers=learner)).json()
+    assert not sections["alphabet"] and sections["basic"][0]["lesson_id"] == lesson_id
     assert (await client.post(
         f"/progress/lessons/{lesson_id}/attempts", headers=learner, json={"completed": True},
     )).status_code == 200
@@ -90,7 +92,11 @@ async def test_revisions_keep_one_visible_video_and_archiving_keeps_progress(rea
     assert updated.json()["published_version"] == first["published_version"]
     assert (await client.get(content_url)).content == original
     assert (await client.get("/videos/lessons")).json()[0]["title"] == "First title"
-    corrected = await edit(client, admin, url, updated.json(), "Second title")
+    moved = await edit(client, admin, url, updated.json(), "Second title", learning_section="alphabet", alphabet_letter="ё")
+    assert moved["revision"]["alphabet_letter"] == "Ё"
+    assert (await client.get("/learning/sections", headers=learner)).json() == sections
+    corrected = await edit(client, admin, url, moved, "Second title")  # Old clients omit placement.
+    assert corrected["revision"]["learning_section"] == "alphabet" and corrected["revision"]["alphabet_letter"] == "Ё"
     reviewed = await action(client, admin, url, corrected, "request_changes", note="Check the name")
     assert reviewed.json()["revision"]["review_note"] == "Check the name"
     second = await publish(client, admin, url, reviewed.json())
@@ -98,11 +104,14 @@ async def test_revisions_keep_one_visible_video_and_archiving_keeps_progress(rea
     assert (await client.get(content_url)).content == replacement
     visible = (await client.get("/videos/lessons")).json()
     assert len(visible) == 1 and visible[0]["title"] == "Second title"
+    sections = (await client.get("/learning/sections", headers=learner)).json()
+    assert not sections["basic"] and sections["alphabet"] == visible
 
     archived = await action(client, admin, url, second, "archive")
     assert archived.status_code == 200 and archived.json()["archived"]
     assert (await client.get(content_url)).status_code == 404
     assert (await client.get("/videos/lessons")).json() == []
+    assert (await client.get("/learning/sections", headers=learner)).json() == {"alphabet": [], "basic": []}
     assert (await client.put(f"/progress/lessons/{lesson_id}/completion", headers=learner)).status_code == 404
     stats = (await client.get("/progress/stats", headers=learner)).json()
     assert stats["total_lessons"] == 0
@@ -116,6 +125,8 @@ async def test_revisions_keep_one_visible_video_and_archiving_keeps_progress(rea
     assert (await client.get(content_url)).status_code == 404
     assert restored.json()["revision"]["review_status"] == "draft"
     republished = await publish(client, admin, url, restored.json())
+    sections = (await client.get("/learning/sections", headers=learner)).json()
+    assert sections["alphabet"][0]["lesson_id"] == lesson_id and sections["alphabet"][0]["alphabet_letter"] == "Ё"
     assert (await client.get("/progress/lessons", headers=learner)).json()[0]["attempts"] == 1
     history = (await client.get(f"{url}/versions", headers=admin)).json()
     assert [item["version"] for item in history] == list(range(republished["revision"]["version"], 0, -1))
@@ -145,6 +156,7 @@ async def test_withdrawal_hides_published_clip_and_preserves_replacement_draft(r
     result = await action(client, admin, url, current, "withdraw_consent", media_version=current["published_version"])
     assert result.status_code == 200
     assert (await client.get("/videos/lessons")).json() == []
+    assert (await client.get("/learning/sections", headers=admin)).json() == {"alphabet": [], "basic": []}
     updated = await edit(client, admin, url, result.json(), "Replacement")
     assert (await action(client, admin, url, updated, "approve")).json()["detail"]["missing"] == ["video"]
 
@@ -163,6 +175,8 @@ async def test_roles_stale_versions_and_upload_limits(real_media, monkeypatch):
         denied = await client.post("/admin/catalog", headers=auth,
                                    json={"gesture_id": str(uuid4()), **fields("Protected")})
         assert denied.status_code == code
+    for auth, code in [({}, 401), (learner, 200), (headers(pending), 400), (headers(inactive), 400)]:
+        assert (await client.get("/learning/sections", headers=auth)).status_code == code
     url, record = await draft(client, admin)
     duplicate = await client.post("/admin/catalog", headers=admin,
                                   json={"gesture_id": record["gesture_id"], **fields("Duplicate")})

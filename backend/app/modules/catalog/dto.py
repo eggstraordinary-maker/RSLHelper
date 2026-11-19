@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Literal
 
 ReviewStatus = Literal["draft", "approved", "changes_requested"]
+LearningSection = Literal["alphabet", "basic"]
+RUSSIAN_ALPHABET = "АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ"
 CatalogAction = Literal[
     "approve", "request_changes", "publish", "unpublish", "archive", "restore", "withdraw_consent",
 ]
@@ -22,6 +24,8 @@ class LessonRecord:
     category: str | None = None
     gesture_id: str | None = None
     version: int | None = None
+    learning_section: LearningSection = "basic"
+    alphabet_letter: str | None = None
 
 
 @dataclass(frozen=True)
@@ -31,6 +35,8 @@ class DraftFields:
     category: str = ""
     source: str = ""
     consent_reference: str = ""
+    learning_section: LearningSection | None = None
+    alphabet_letter: str | None = None
 
 
 @dataclass(frozen=True)
@@ -54,6 +60,8 @@ class RevisionRecord:
     action: str
     author_id: int | None
     created_at: datetime
+    learning_section: LearningSection
+    alphabet_letter: str | None
 
 
 @dataclass(frozen=True)

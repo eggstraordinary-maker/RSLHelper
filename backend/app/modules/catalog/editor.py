@@ -33,7 +33,11 @@ def _check_editable(state: repo.EditingState) -> None:
 
 
 def _fields(revision: CatalogRevision) -> DraftFields:
-    return DraftFields(revision.title, revision.description, revision.category, revision.source, revision.consent_reference)
+    return DraftFields(
+        title=revision.title, description=revision.description, category=revision.category,
+        source=revision.source, consent_reference=revision.consent_reference,
+        learning_section=revision.learning_section, alphabet_letter=revision.alphabet_letter,
+    )
 
 
 async def list_gestures(db: AsyncSession, offset: int, limit: int) -> list[GestureRecord]:
@@ -59,6 +63,8 @@ async def preview_object(db: AsyncSession, gesture_id: str, version: int) -> str
 
 async def _create(db: AsyncSession, gesture_id: str, fields: DraftFields, author_id: int,
                   uploaded: UploadedVideo | None = None):
+    if fields.learning_section is None:
+        fields = replace(fields, learning_section="basic")
     lesson = await repo.add_lesson(db, lesson_id=str(uuid4()), title=fields.title)
     try:
         gesture = await repo.add_gesture(db, gesture_id, lesson.lesson_id)
@@ -96,6 +102,11 @@ async def edit_gesture(db: AsyncSession, gesture_id: str, expected_version: int,
         state = await _lookup(db, gesture_id, lock=True)
         _check_version(state, expected_version)
         _check_editable(state)
+        # Older catalog clients omit placement. An unrelated edit must keep it.
+        if fields.learning_section is None:
+            fields = replace(
+                fields, learning_section=state.revision.learning_section, alphabet_letter=state.revision.alphabet_letter,
+            )
         state.gesture.version += 1
         revision = await repo.append_revision(db, state.gesture, fields, state.media, action="edited", author_id=author_id)
         result = repo.gesture_record(state.gesture, revision, state.media)
