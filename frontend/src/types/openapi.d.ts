@@ -17,6 +17,119 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить жесты, включая черновики и архив */
+        get: operations["list_gestures_admin_catalog_get"];
+        put?: never;
+        /** Создать черновик жеста */
+        post: operations["create_gesture_admin_catalog_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/{gesture_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить актуальную версию жеста */
+        get: operations["get_gesture_admin_catalog__gesture_id__get"];
+        /** Сохранить новую версию черновика */
+        put: operations["edit_gesture_admin_catalog__gesture_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/{gesture_id}/transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Проверить, опубликовать, снять, архивировать, восстановить или отозвать согласие
+         * @description Публикация требует видео, категории, источника, согласия и отдельного одобрения версии. Отзыв действует на все версии с указанным видеопримером. Вся операция привязана к актуальной версии.
+         */
+        post: operations["transition_admin_catalog__gesture_id__transitions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/{gesture_id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Получить историю версий жеста */
+        get: operations["gesture_history_admin_catalog__gesture_id__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/{gesture_id}/versions/{version}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Просмотреть сохранённый видеопример для модерации
+         * @description Авторизованный просмотр MP4 указанной версии. Отозванное видео недоступно.
+         */
+        get: operations["preview_admin_catalog__gesture_id__versions__version__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/catalog/{gesture_id}/video": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Загрузить или заменить единственный видеопример черновика
+         * @description MP4/H.264 до 100 МБ (100 000 000 байт) и 15 секунд. Загрузка создаёт новую версию с незаполненными источником и согласием.
+         */
+        put: operations["replace_video_admin_catalog__gesture_id__video_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/users": {
         parameters: {
             query?: never;
@@ -516,9 +629,9 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Загрузить проверенный MP4 урока
+         * Загрузить MP4 в черновик (совместимость)
          * @deprecated
-         * @description Только администратор. MP4 с H.264: до 100 МБ (100 000 000 байт) и 15 секунд; настройки развёртывания могут уменьшить лимиты. Legacy-ответ содержит внутренний ключ; публичный каталог использует lesson_id.
+         * @description Только администратор. Создаёт черновик, который можно проверить и опубликовать из редактора каталога. MP4 с H.264 до 100 МБ (100 000 000 байт) и 15 секунд. Для новых клиентов используйте /admin/catalog.
          */
         post: operations["upload_video_videos_upload_post"];
         delete?: never;
@@ -575,6 +688,13 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** Body_replace_video_admin_catalog__gesture_id__video_put */
+        Body_replace_video_admin_catalog__gesture_id__video_put: {
+            /** Expected Version */
+            expected_version: number;
+            /** File */
+            file: string;
+        };
         /** Body_upload_video_videos_upload_post */
         Body_upload_video_videos_upload_post: {
             /**
@@ -584,6 +704,159 @@ export interface components {
             description: string;
             /** File */
             file: string;
+        };
+        /** CatalogConflictDetail */
+        CatalogConflictDetail: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Missing */
+            missing?: string[];
+        };
+        /** CatalogConflictResponse */
+        CatalogConflictResponse: {
+            detail: components["schemas"]["CatalogConflictDetail"];
+        };
+        /** CatalogCreate */
+        CatalogCreate: {
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Consent Reference
+             * @description Internal reference to the permission to publish
+             * @default
+             */
+            consent_reference: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /**
+             * Gesture Id
+             * Format: uuid
+             * @description Client-generated UUID, reused on retry to avoid duplicate drafts
+             */
+            gesture_id: string;
+            /**
+             * Source
+             * @description Provenance of the current video
+             * @default
+             */
+            source: string;
+            /** Title */
+            title: string;
+        };
+        /** CatalogEdit */
+        CatalogEdit: {
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Consent Reference
+             * @description Internal reference to the permission to publish
+             * @default
+             */
+            consent_reference: string;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Source
+             * @description Provenance of the current video
+             * @default
+             */
+            source: string;
+            /** Title */
+            title: string;
+        };
+        /** CatalogGestureResponse */
+        CatalogGestureResponse: {
+            /** Archived */
+            archived: boolean;
+            /**
+             * Gesture Id
+             * Format: uuid
+             */
+            gesture_id: string;
+            /**
+             * Lesson Id
+             * Format: uuid
+             */
+            lesson_id: string;
+            /**
+             * Published Version
+             * @description Version currently visible in the dictionary, if any
+             */
+            published_version: number | null;
+            /** @description Latest saved version for editing and review */
+            revision: components["schemas"]["CatalogRevisionResponse"];
+        };
+        /** CatalogRevisionResponse */
+        CatalogRevisionResponse: {
+            /** Action */
+            action: string;
+            /** Author Id */
+            author_id: number | null;
+            /** Category */
+            category: string;
+            /** Consent Reference */
+            consent_reference: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string;
+            /** Filename */
+            filename: string | null;
+            /** Review Note */
+            review_note: string;
+            /**
+             * Review Status
+             * @enum {string}
+             */
+            review_status: "draft" | "approved" | "changes_requested";
+            /** Source */
+            source: string;
+            /** Title */
+            title: string;
+            /** Version */
+            version: number;
+            /** Video Withdrawn */
+            video_withdrawn: boolean;
+        };
+        /** CatalogTransition */
+        CatalogTransition: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "approve" | "request_changes" | "publish" | "unpublish" | "archive" | "restore" | "withdraw_consent";
+            /** Expected Version */
+            expected_version: number;
+            /**
+             * Media Version
+             * @description When withdrawing consent, the version whose video must be withdrawn
+             */
+            media_version?: number | null;
+            /**
+             * Note
+             * @description Moderation comment
+             * @default
+             */
+            note: string;
         };
         /** DeleteAccountRequest */
         DeleteAccountRequest: {
@@ -633,12 +906,22 @@ export interface components {
          * @description Published lesson contract independent of the internal object-store key.
          */
         LessonResponse: {
+            /** Category */
+            category?: string | null;
             /** Description */
             description: string | null;
             /** Filename */
             filename: string;
+            /** Gesture Id */
+            gesture_id?: string | null;
             /** Id */
             id: number;
+            /**
+             * Is Learning Material
+             * @description A learning example without an integrated model class
+             * @default true
+             */
+            is_learning_material: boolean;
             /** Is Published */
             is_published: boolean;
             /** Lesson Id */
@@ -648,6 +931,10 @@ export interface components {
              * @description Relative API URL of the published MP4
              */
             media_url: string;
+            /** Title */
+            title?: string | null;
+            /** Version */
+            version?: number | null;
         };
         /** PasswordChange */
         PasswordChange: {
@@ -694,6 +981,11 @@ export interface components {
             recent_lessons: string[];
             /** Total Lessons */
             total_lessons: number;
+            /**
+             * Unavailable Lessons
+             * @description Own saved progress for lessons no longer available for playback
+             */
+            unavailable_lessons?: components["schemas"]["UnavailableLessonProgress"][];
             /**
              * Unresolved Legacy Records
              * @default 0
@@ -755,6 +1047,23 @@ export interface components {
              * @default bearer
              */
             token_type: string;
+        };
+        /** UnavailableLessonProgress */
+        UnavailableLessonProgress: {
+            /**
+             * Attempts
+             * @default 0
+             */
+            attempts: number;
+            /**
+             * Completed
+             * @default false
+             */
+            completed: boolean;
+            /** Lesson Id */
+            lesson_id: string;
+            /** Word */
+            word: string;
         };
         /** UserCreate */
         UserCreate: {
@@ -844,6 +1153,8 @@ export interface components {
             description: string | null;
             /** Filename */
             filename: string;
+            /** Gesture Id */
+            gesture_id?: string | null;
             /** Id */
             id: number;
             /** Is Published */
@@ -879,6 +1190,590 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+        };
+    };
+    list_gestures_admin_catalog_get: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"][];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_gesture_admin_catalog_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_gesture_admin_catalog__gesture_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    edit_gesture_admin_catalog__gesture_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    transition_admin_catalog__gesture_id__transitions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogTransition"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    gesture_history_admin_catalog__gesture_id__versions_get: {
+        parameters: {
+            query?: {
+                before_version?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                gesture_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogRevisionResponse"][];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    preview_admin_catalog__gesture_id__versions__version__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": unknown;
+                };
+            };
+            /** @description Диапазон байтов */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    replace_video_admin_catalog__gesture_id__video_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gesture_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_replace_video_admin_catalog__gesture_id__video_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogGestureResponse"];
+                };
+            };
+            /** @description Требуется вход */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Требуется роль администратора */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Жест или видео отсутствует */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Конфликт версии или условий модерации */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogConflictResponse"];
+                };
+            };
+            /** @description Превышен размер запроса */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Недопустимое видео */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Каталог или хранилище временно недоступно */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

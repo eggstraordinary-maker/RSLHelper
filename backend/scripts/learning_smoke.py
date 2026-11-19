@@ -67,15 +67,28 @@ def create_fixture(video_path: Path, *, password: str | None = None) -> dict:
             login.raise_for_status()
             headers = {"Authorization": "Bearer " + login.json()["access_token"]}
             for index in range(2):
+                description = f"E2E practice {run_id}"
                 upload = client.post(
                     "/videos/upload",
                     headers=headers,
-                    data={"description": f"E2E practice {run_id}"},
+                    data={"description": description},
                     files={"file": (f"e2e-{run_id}-{index}.mp4", payload, "video/mp4")},
                 )
                 upload.raise_for_status()
-                lesson_ids.append(upload.json()["lesson_id"])
-                objects.append(upload.json()["object_name"])
+                draft = upload.json()
+                lesson_ids.append(draft["lesson_id"])
+                objects.append(draft["object_name"])
+                url = f"/admin/catalog/{draft['gesture_id']}"
+                saved = client.put(url, headers=headers, json={
+                    "expected_version": 1, "title": description, "description": description,
+                    "category": "E2E", "source": "Local test fixture", "consent_reference": "Test fixture",
+                })
+                saved.raise_for_status()
+                for action in ("approve", "publish"):
+                    saved = client.post(f"{url}/transitions", headers=headers, json={
+                        "expected_version": saved.json()["revision"]["version"], "action": action,
+                    })
+                    saved.raise_for_status()
     except BaseException:
         cleanup_fixture(fixture)
         raise
@@ -117,24 +130,40 @@ def cleanup_fixture(fixture: dict) -> None:
                 )
             )
             db.execute(delete(models.EmailVerification).where(models.EmailVerification.email == user.email))
-            db.delete(user)
         for lesson_id, object_name in zip(fixture["lesson_ids"], fixture["objects"]):
             video = db.scalar(
                 select(models.VideoFile).where(
                     models.VideoFile.lesson_id == lesson_id,
-                    models.VideoFile.object_name == object_name,
                 )
             )
             if video:
+                initial_upload = db.scalar(
+                    select(models.CatalogMedia)
+                    .join(models.CatalogGesture, models.CatalogGesture.id == models.CatalogMedia.gesture_id)
+                    .join(models.CatalogRevision, models.CatalogRevision.media_id == models.CatalogMedia.id)
+                    .where(
+                        models.CatalogGesture.lesson_id == lesson_id,
+                        models.CatalogRevision.version == 1,
+                        models.CatalogRevision.author_id == fixture["user_id"],
+                        models.CatalogRevision.description == f"E2E practice {run_id}",
+                        models.CatalogMedia.object_name == object_name,
+                    )
+                )
                 # Keys are now opaque UUIDs. The server-side record, not its
                 # key's spelling, proves that this clip belongs to this run.
-                if (not video.filename.startswith(f"e2e-{run_id}-")
-                        or video.description != f"E2E practice {run_id}"):
+                tagged = (
+                    initial_upload.filename.startswith(f"e2e-{run_id}-") if initial_upload
+                    else video.object_name == object_name and video.filename.startswith(f"e2e-{run_id}-")
+                    and video.description == f"E2E practice {run_id}"
+                )
+                if not tagged:
                     raise ValueError("Refusing to delete an untagged lesson")
                 db.delete(video)
                 objects_to_delete.append(object_name)
             elif storage.object_exists(object_name):
                 raise ValueError("Missing tagged lesson: explicitly review orphan-object cleanup")
+        if user:
+            db.delete(user)
         db.commit()
     # A failed SQL commit must not remove a still-referenced object.
     for object_name in objects_to_delete:

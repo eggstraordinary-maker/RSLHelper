@@ -1,0 +1,3 @@
+[run]
+# SQLAlchemy's async session switches between greenlets during requests.
+concurrency = thread, greenlet

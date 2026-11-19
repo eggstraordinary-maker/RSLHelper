@@ -1,5 +1,7 @@
 """Limit upload bodies before Starlette allocates multipart temporary files."""
 
+import re
+
 from starlette.datastructures import Headers
 from starlette.formparsers import MultiPartException
 from starlette.responses import JSONResponse
@@ -7,12 +9,22 @@ from starlette.responses import JSONResponse
 from app.config import settings
 
 
+def _is_upload(scope):
+    if scope["type"] != "http":
+        return False
+    method, path = scope.get("method"), scope.get("path", "").rstrip("/")
+    return (
+        (method == "POST" and path == "/videos/upload")
+        or (method == "PUT" and re.fullmatch(r"/admin/catalog/[^/]+/video", path) is not None)
+    )
+
+
 class UploadBodyLimitMiddleware:
     def __init__(self, app):
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope.get("method") != "POST" or scope.get("path", "").rstrip("/") != "/videos/upload":
+        if not _is_upload(scope):
             await self.app(scope, receive, send)
             return
         limit = settings.media_max_upload_bytes + settings.media_max_request_overhead_bytes

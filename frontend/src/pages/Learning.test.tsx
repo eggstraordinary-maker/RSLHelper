@@ -14,8 +14,8 @@ vi.mock('../services/api', () => ({
 }));
 
 const lessons: VideoInfo[] = [
-  { id: 1, lesson_id: '11111111-1111-4111-8111-111111111111', filename: 'one.mp4', description: 'Same', media_url: '/videos/lessons/11111111-1111-4111-8111-111111111111/content', is_published: true },
-  { id: 2, lesson_id: '22222222-2222-4222-8222-222222222222', filename: 'two.mp4', description: 'Same', media_url: '/videos/lessons/22222222-2222-4222-8222-222222222222/content', is_published: true },
+  { id: 1, lesson_id: '11111111-1111-4111-8111-111111111111', filename: 'one.mp4', description: 'Same', media_url: '/videos/lessons/11111111-1111-4111-8111-111111111111/content', is_published: true, is_learning_material: true },
+  { id: 2, lesson_id: '22222222-2222-4222-8222-222222222222', filename: 'two.mp4', description: 'Same', media_url: '/videos/lessons/22222222-2222-4222-8222-222222222222/content', is_published: true, is_learning_material: true },
 ];
 const saved = (lesson = lessons[0], attempts = 1, completed = false): UserProgress => ({
   id: 1, user_id: 1, lesson_id: lesson.lesson_id, word: 'Same', attempts, completed,

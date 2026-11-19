@@ -12,12 +12,14 @@ from .errors import AmbiguousLessonError, AttemptConflictError, LessonNotFoundEr
 
 async def get_stats(db: AsyncSession, user_id: int) -> schemas.ProgressStats:
     total, completed, recent, unresolved = await repo.stats_snapshot(db, user_id)
+    unavailable = await repo.unavailable_progress(db, user_id)
     return schemas.ProgressStats(
         total_lessons=total,
         completed_lessons=completed,
         completed_percentage=round(completed / total * 100, 2) if total else 0,
         recent_lessons=recent,
         unresolved_legacy_records=unresolved,
+        unavailable_lessons=[schemas.UnavailableLessonProgress.model_validate(row) for row in unavailable],
     )
 
 
@@ -69,7 +71,7 @@ async def record_progress(
             db,
             user_id,
             lesson.lesson_id,
-            (lesson.description or lesson.filename)[:100],
+            (lesson.title or lesson.description or lesson.filename)[:100],
             practice=practice,
             completed=completed,
             now=datetime.now(timezone.utc),

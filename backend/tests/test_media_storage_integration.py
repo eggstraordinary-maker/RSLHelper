@@ -60,7 +60,9 @@ async def real_media(pg_api):
     try:
         yield client, engine, headers(admin), s3, owned
     finally:
-        # Delete only objects returned by successful uploads in this fixture.
+        # The database is per test. Include committed historical versions.
+        with Session(engine) as db:
+            owned.update(db.scalars(select(models.CatalogMedia.object_name)))
         for key in owned:
             s3.delete_object(Bucket=BUCKET, Key=key)
         assert not (object_keys(s3) & owned)
@@ -76,6 +78,17 @@ async def upload(client, admin_headers, payload, owned):
     owned.add(record["object_name"])
     assert record["object_name"].endswith(".mp4")
     UUID(record["object_name"][:-4])
+    url = f"/admin/catalog/{record['gesture_id']}"
+    updated = await client.put(url, headers=admin_headers, json={
+        "expected_version": 1, "title": "Integration lesson", "category": "Test",
+        "source": "Synthetic fixture", "consent_reference": "Fixture permission",
+    })
+    assert updated.status_code == 200
+    for action in ("approve", "publish"):
+        updated = await client.post(f"{url}/transitions", headers=admin_headers, json={
+            "expected_version": updated.json()["revision"]["version"], "action": action,
+        })
+        assert updated.status_code == 200
     return record
 
 
@@ -90,7 +103,11 @@ async def test_real_media_upload_catalog_stream_ranges_head_and_publication(real
     lesson = next(row for row in catalog.json() if row["lesson_id"] == lesson_id)
     assert "object_name" not in lesson
     assert lesson["media_url"] == content_url
-    assert set(lesson) == {"id", "lesson_id", "filename", "description", "is_published", "media_url"}
+    assert lesson["gesture_id"] == record["gesture_id"]
+    assert lesson["title"] == "Integration lesson" and lesson["is_learning_material"] is True
+    assert "source" not in lesson and "consent_reference" not in lesson
+    legacy_link = (await client.get(f"/videos/{record['object_name']}")).json()["url"]
+    assert legacy_link.endswith(content_url) and record["object_name"] not in legacy_link
     assert row_count(engine) == 1
     metadata = s3.head_object(Bucket=BUCKET, Key=record["object_name"])
     assert metadata["ContentLength"] == len(payload)
@@ -134,6 +151,7 @@ async def test_real_media_upload_catalog_stream_ranges_head_and_publication(real
         video.is_published = False
         db.commit()
     assert (await client.get(content_url)).status_code == 404
+    assert (await client.get(legacy_link)).status_code == 404
     assert (await client.head(content_url)).status_code == 404
     catalog = await client.get("/videos/lessons")
     assert catalog.status_code == 200

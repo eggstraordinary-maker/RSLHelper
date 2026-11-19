@@ -29,3 +29,12 @@ class InvalidRangeError(MediaError):
 
 class AmbiguousLessonError(ValueError):
     """A legacy label cannot identify a unique published lesson."""
+
+
+class CatalogConflictError(Exception):
+    """A stale version or an invalid moderation transition."""
+
+    def __init__(self, code: str, message: str, missing: tuple[str, ...] = ()):
+        super().__init__(message)
+        self.code = code
+        self.missing = missing

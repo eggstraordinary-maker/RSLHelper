@@ -1,7 +1,7 @@
 """Bounded MP4 validation, catalog transactions and object-store coordination."""
 
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 import json
 import logging
@@ -22,9 +22,9 @@ from app.config import settings
 from app.services.storage import ObjectStorage, StoredObject, storage
 
 from . import repository as repo
-from .dto import LessonRecord
+from .dto import LessonRecord, UploadedVideo
 from .errors import (
-    AmbiguousLessonError, InvalidRangeError, MediaNotFoundError, MediaTooLargeError,
+    AmbiguousLessonError, CatalogConflictError, InvalidRangeError, MediaError, MediaNotFoundError, MediaTooLargeError,
     MediaUnavailableError, UnsupportedMediaError,
 )
 
@@ -189,50 +189,42 @@ def _confirmed_commit_failure(exc: BaseException) -> bool:
     return False
 
 
-async def upload_lesson(
-    db: AsyncSession, source: BinaryIO, filename: str | None,
-    content_type: str | None, description: str,
-):
+@asynccontextmanager
+async def catalog_write(db: AsyncSession, *, uploaded_key: str | None = None):
+    committing = False
+    try:
+        yield
+        committing = True
+        await db.commit()
+    except BaseException as exc:
+        with anyio.CancelScope(shield=True):
+            await _rollback_safely(db)
+            # A lost connection during COMMIT has an unknown outcome. Retain
+            # the object rather than break a potentially committed version.
+            if uploaded_key and (not committing or _confirmed_commit_failure(exc)):
+                await _cleanup(storage, uploaded_key)
+        if isinstance(exc, (CatalogConflictError, MediaError)) or not isinstance(exc, Exception):
+            raise
+        logger.warning("Catalog write failed (%s)", type(exc).__name__)
+        raise MediaUnavailableError("Catalog change could not be saved") from None
+
+
+@asynccontextmanager
+async def video_upload(db: AsyncSession, source: BinaryIO, filename: str | None, content_type: str | None):
     prepared = await run_in_threadpool(prepare_upload, source, filename, content_type)
     object_name = f"{uuid4().hex}.mp4"
-    object_store = storage
     try:
         try:
-            await run_in_threadpool(_put, prepared, object_name, object_store)
+            await run_in_threadpool(_put, prepared, object_name, storage)
         except BaseException as exc:
             with anyio.CancelScope(shield=True):
-                await _cleanup(object_store, object_name)
+                await _cleanup(storage, object_name)
             if not isinstance(exc, Exception):
                 raise
             logger.warning("Media upload failed (%s)", type(exc).__name__)
             raise MediaUnavailableError("Video storage is temporarily unavailable") from None
-        try:
-            lesson = await repo.add_lesson(
-                db, lesson_id=str(uuid4()), filename=prepared.filename,
-                description=description, object_name=object_name,
-            )
-        except BaseException as exc:
-            with anyio.CancelScope(shield=True):
-                await _rollback_safely(db)
-                await _cleanup(object_store, object_name)
-            if not isinstance(exc, Exception):
-                raise
-            logger.warning("Media metadata write failed (%s)", type(exc).__name__)
-            raise MediaUnavailableError("Video could not be saved") from None
-        try:
-            await db.commit()
-        except BaseException as exc:
-            # A lost DB connection during commit has an unknown outcome. Retain
-            # the object rather than break a possibly committed lesson record.
-            with anyio.CancelScope(shield=True):
-                await _rollback_safely(db)
-                if _confirmed_commit_failure(exc):
-                    await _cleanup(object_store, object_name)
-            if not isinstance(exc, Exception):
-                raise
-            logger.warning("Media metadata commit failed (%s)", type(exc).__name__)
-            raise MediaUnavailableError("Video could not be saved") from None
-        return lesson
+        async with catalog_write(db, uploaded_key=object_name):
+            yield UploadedVideo(prepared.filename, object_name)
     finally:
         prepared.path.unlink(missing_ok=True)
 
@@ -291,9 +283,9 @@ def _not_found(exc: Exception) -> bool:
     return response.get("ResponseMetadata", {}).get("HTTPStatusCode") == 404 or response.get("Error", {}).get("Code") in {"404", "NoSuchKey", "NotFound"}
 
 
-async def read_media(lesson: LessonRecord, *, range_header: str | None, if_range: str | None, head: bool) -> MediaRead:
+async def media_metadata(object_name: str):
     try:
-        metadata = await run_in_threadpool(storage.stat_object, lesson.object_name)
+        metadata = await run_in_threadpool(storage.stat_object, object_name)
     except Exception as exc:
         logger.warning("Media metadata lookup failed (%s)", type(exc).__name__)
         if _not_found(exc):
@@ -301,13 +293,18 @@ async def read_media(lesson: LessonRecord, *, range_header: str | None, if_range
         raise MediaUnavailableError("Video storage is temporarily unavailable") from None
     if metadata.size <= 0 or metadata.content_type.split(";", 1)[0].lower() != "video/mp4":
         raise MediaNotFoundError("Video not found")
+    return metadata
+
+
+async def read_media(object_name: str, *, range_header: str | None, if_range: str | None, head: bool) -> MediaRead:
+    metadata = await media_metadata(object_name)
     selected = None if head or if_range is not None else single_range(range_header, metadata.size)
     start, end = selected or (0, metadata.size - 1)
     if head:
         return MediaRead(metadata.size, start, end, False, None)
     try:
         body = await run_in_threadpool(
-            storage.get_object, lesson.object_name,
+            storage.get_object, object_name,
             f"bytes={start}-{end}" if selected else None,
         )
     except Exception as exc:
@@ -316,11 +313,3 @@ async def read_media(lesson: LessonRecord, *, range_header: str | None, if_range
             raise MediaNotFoundError("Video not found") from None
         raise MediaUnavailableError("Video storage is temporarily unavailable") from None
     return MediaRead(metadata.size, start, end, selected is not None, body)
-
-
-async def legacy_url(lesson: LessonRecord) -> str:
-    try:
-        return await run_in_threadpool(storage.presigned_get_object, lesson.object_name, timedelta(hours=2))
-    except Exception as exc:
-        logger.warning("Media link generation failed (%s)", type(exc).__name__)
-        raise MediaNotFoundError("Video not found") from None

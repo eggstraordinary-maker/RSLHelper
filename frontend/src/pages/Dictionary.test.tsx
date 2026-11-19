@@ -13,10 +13,10 @@ import en from '../locales/en/dictionary.json';
 
 const lessons: VideoInfo[] = [
   { id: 1, lesson_id: '11111111-1111-4111-8111-111111111111', filename: 'first.mp4',
-    description: 'Одинаковое название', is_published: true,
+    description: 'Одинаковое название', is_published: true, is_learning_material: true,
     media_url: '/videos/lessons/11111111-1111-4111-8111-111111111111/content' },
   { id: 2, lesson_id: '22222222-2222-4222-8222-222222222222', filename: 'second.mp4',
-    description: 'Одинаковое название', is_published: true,
+    description: 'Одинаковое название', is_published: true, is_learning_material: true,
     media_url: '/videos/lessons/22222222-2222-4222-8222-222222222222/content' },
 ];
 const mock = new MockAdapter(publicApiClient);

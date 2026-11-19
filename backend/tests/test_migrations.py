@@ -85,6 +85,61 @@ def test_fresh_database_bootstraps_all_application_tables(migration_url: str) ->
     assert "alembic_version" in tables
 
 
+def test_catalog_upgrade_keeps_legacy_publication_id_and_progress(migration_url):
+    _upgrade(migration_url, "0007_auth_rate_limits")
+    engine = create_engine(migration_url)
+    published_id, hidden_id = str(uuid4()), str(uuid4())
+    attempt = str(uuid4())
+    try:
+        old_videos = Table("video_files", MetaData(), autoload_with=engine)
+        with engine.begin() as connection:
+            connection.execute(old_videos.insert(), [
+                {"lesson_id": published_id, "filename": "visible.mp4", "description": "Existing sign",
+                 "is_published": True, "object_name": "existing.mp4"},
+                {"lesson_id": hidden_id, "filename": "hidden.mp4", "description": None,
+                 "is_published": False, "object_name": None},
+            ])
+            user_id = connection.scalar(models.User.__table__.insert().values(
+                email="migration@example.com", username="migration", hashed_password="fixture", role="user",
+            ).returning(models.User.id))
+            connection.execute(models.UserLearningProgress.__table__.insert().values(
+                user_id=user_id, lesson_id=published_id, word="Existing sign", completed=True, attempts=7,
+            ))
+            connection.execute(models.LearningAttemptReceipt.__table__.insert().values(
+                user_id=user_id, lesson_id=published_id, attempt_id=attempt, completed=True,
+                response_payload={"attempts": 7},
+            ))
+        _upgrade(migration_url)
+        with Session(engine) as db:
+            visible = db.scalar(select(models.VideoFile).where(models.VideoFile.lesson_id == published_id))
+            assert visible.is_published and visible.object_name == "existing.mp4"
+            gestures = {entry.lesson_id: entry for entry in db.scalars(select(models.CatalogGesture))}
+            assert set(gestures) == {published_id, hidden_id}
+            assert gestures[published_id].published_version == 1
+            assert gestures[hidden_id].published_version is None
+            imported = db.get(models.CatalogRevision, (gestures[published_id].id, 1))
+            assert imported.title == "Existing sign" and imported.action == "imported"
+            assert imported.consent_reference == "" and imported.author_id is None
+            assert db.get(models.CatalogMedia, imported.media_id).object_name == visible.object_name
+            progress = db.scalar(select(models.UserLearningProgress))
+            assert progress.lesson_id == published_id and progress.attempts == 7 and progress.completed
+            assert db.get(models.LearningAttemptReceipt, (user_id, attempt)).response_payload == {"attempts": 7}
+
+        config = Config(str(ALEMBIC_INI))
+        previous = os.environ.get("DATABASE_URL")
+        os.environ["DATABASE_URL"] = migration_url
+        try:
+            with pytest.raises(RuntimeError, match="Cannot remove catalog revision history"):
+                command.downgrade(config, "0007_auth_rate_limits")
+        finally:
+            if previous is None:
+                os.environ.pop("DATABASE_URL", None)
+            else:
+                os.environ["DATABASE_URL"] = previous
+    finally:
+        engine.dispose()
+
+
 def test_attempt_receipts_prevent_lossy_downgrade(migration_url):
     _upgrade(migration_url)
     engine = create_engine(migration_url)
