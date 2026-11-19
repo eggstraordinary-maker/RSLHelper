@@ -130,6 +130,7 @@ def cleanup_fixture(fixture: dict) -> None:
                 )
             )
             db.execute(delete(models.EmailVerification).where(models.EmailVerification.email == user.email))
+            objects_to_delete.extend(_remove_browser_catalog_draft(db, user, run_id))
         for lesson_id, object_name in zip(fixture["lesson_ids"], fixture["objects"]):
             video = db.scalar(
                 select(models.VideoFile).where(
@@ -168,6 +169,40 @@ def cleanup_fixture(fixture: dict) -> None:
     # A failed SQL commit must not remove a still-referenced object.
     for object_name in objects_to_delete:
         storage.delete_object(object_name)
+
+
+def _remove_browser_catalog_draft(db: Session, user: models.User, run_id: str) -> list[str]:
+    """Remove the single gesture created through the browser catalog editor."""
+    rows = db.execute(
+        select(models.VideoFile, models.CatalogGesture)
+        .join(models.CatalogGesture, models.CatalogGesture.lesson_id == models.VideoFile.lesson_id)
+        .join(models.CatalogRevision, models.CatalogRevision.gesture_id == models.CatalogGesture.id)
+        .where(
+            models.CatalogRevision.version == 1,
+            models.CatalogRevision.action == "created",
+            models.CatalogRevision.author_id == user.id,
+            models.CatalogRevision.title == f"E2E catalog {run_id}",
+        )
+        .with_for_update(of=(models.VideoFile, models.CatalogGesture))
+    ).all()
+    if not rows:
+        return []
+    if len(rows) != 1 or user.username != f"e2e_{run_id}":
+        raise ValueError("Refusing to remove an ambiguous browser catalog fixture")
+    lesson, gesture = rows[0]
+    foreign_revision = db.scalar(
+        select(models.CatalogRevision.version).where(
+            models.CatalogRevision.gesture_id == gesture.id,
+            models.CatalogRevision.author_id.is_distinct_from(user.id),
+        ).limit(1)
+    )
+    media = db.scalars(select(models.CatalogMedia).where(models.CatalogMedia.gesture_id == gesture.id)).all()
+    if foreign_revision is not None or any(clip.filename != f"e2e-{run_id}-catalog.mp4" for clip in media):
+        raise ValueError("Refusing to remove a browser fixture with unrelated changes")
+    # The FK on progress and attempt receipts rejects deletion if another
+    # learner used this lesson. S3 removal still waits for the SQL commit.
+    db.delete(lesson)
+    return [clip.object_name for clip in media]
 
 
 def smoke(fixture: dict) -> None:

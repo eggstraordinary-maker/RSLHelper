@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { progressApi, videosApi } from '../services/api';
 import { getApiErrorMessage, getSessionRevision } from '../services/apiClient';
 import { acknowledgePracticeAttempt, beginPracticeAttempt } from '../features/learning';
+import { LessonDetails, lessonLabel } from '../features/catalog';
 import type { UserProgress, VideoInfo } from '../types/api';
 
 export default function Learning() {
@@ -68,7 +69,7 @@ function LearningSession() {
   useEffect(() => {
     setVideoLoading(true);
     setVideoError(false);
-  }, [selectedId, videoRetry]);
+  }, [selectedId, selected?.version, videoRetry]);
 
   const savePractice = async (complete: boolean) => {
     if (!selected || !user || saveInFlight.current || progressLoading || progressError) return;
@@ -112,14 +113,16 @@ function LearningSession() {
   if (!selected) return <div className="py-8 text-center text-gray-500">Уроков пока нет. Загляните позже.</div>;
 
   return <div className="grid grid-cols-1 gap-4 xl:grid-cols-[auto_1fr]">
-    <LeftTOC items={videos.map(v => ({ id: v.lesson_id, label: v.description || v.filename }))} active={selectedId} onSelect={setSelectedId} />
+    <LeftTOC items={videos.map(v => ({ id: v.lesson_id, label: lessonLabel(v) }))} active={selectedId} onSelect={setSelectedId} />
     <div className="space-y-4">
       <div className="rounded-lg border bg-white p-4">
-        <h3 className="text-lg font-semibold">{selected.description || selected.filename}</h3>
+        <h3 className="text-lg font-semibold [overflow-wrap:anywhere]">{lessonLabel(selected)}</h3>
+        <LessonDetails lesson={selected} />
+        {selected.title && selected.description && selected.title !== selected.description && <p className="mt-2 whitespace-pre-line [overflow-wrap:anywhere]">{selected.description}</p>}
         <p className="mt-2 text-sm text-gray-600">Посмотрите эталонный клип, повторите жест и сохраните самостоятельную практику. Завершение урока — ваша отметка, автоматическая оценка модели сейчас недоступна.</p>
       </div>
       {videoLoading && !videoError && <p role="status">Загрузка эталонного видео…</p>}
-      <video key={`${selectedId}:${videoRetry}`} src={videosApi.streamUrl(selected.media_url)} controls playsInline
+      <video key={`${selectedId}:${selected.version}:${videoRetry}`} src={videosApi.streamUrl(selected.media_url)} controls playsInline
         aria-label="Эталонный жест" className="w-full rounded-lg border"
         onLoadedData={() => setVideoLoading(false)} onError={() => { setVideoLoading(false); setVideoError(true); }} />
       {videoError && <div role="alert" className="rounded border p-4 text-red-700">Не удалось загрузить эталонное видео.

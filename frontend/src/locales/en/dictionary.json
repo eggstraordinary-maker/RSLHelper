@@ -13,5 +13,7 @@
   "videoLabel": "Reference sign",
   "selectedSign": "Selected sign",
   "descriptionTitle": "Sign description",
+  "lessonCategory": "Category · {{category}}",
+  "learningMaterial": "Learning material",
   "noDescription": "A description is not available for this sign yet. Refer to the video."
 }

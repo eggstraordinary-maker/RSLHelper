@@ -116,6 +116,18 @@ describe('account forms', () => {
 
 describe('profile and guest flow', () => {
   const stats = { total_lessons: 2, completed_lessons: 1, completed_percentage: 50, recent_lessons: ['Hello'], unresolved_legacy_records: 0 };
+  it('shows archived progress with its completion state and without a video link', async () => {
+    setSessionTokens(tokens); api.onGet('/users/me').reply(200, testUser);
+    api.onGet('/progress/stats').reply(200, { ...stats, unavailable_lessons: [
+      { lesson_id: 'old-lesson', word: 'Недоступный жест', attempts: 2, completed: true },
+      { lesson_id: 'pending-lesson', word: 'Прежний урок', attempts: 1, completed: false },
+    ] });
+    await show(<RequireSession><Profile /></RequireSession>);
+    await screen.findByRole('heading', { name: strings.unavailableLessons });
+    expect(screen.getByText('Урок пройден · Повторений сохранено — 2')).toBeTruthy();
+    expect(screen.getByText('Урок начат · Повторений сохранено — 1')).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Недоступный жест' })).toBeNull();
+  });
   it('redirects an anonymous profile without exposing its forms', async () => {
     await show(<Routes><Route path="/" element={<RequireSession><Profile /></RequireSession>} /></Routes>);
     await waitFor(() => expect(screen.queryByText(strings.loading)).toBeNull());

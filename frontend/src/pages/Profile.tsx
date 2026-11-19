@@ -32,6 +32,7 @@ export default function Profile() {
     return () => { active = false; };
   }, [owner, getProgressStats, revision]);
   const progress = stats?.owner === user?.public_id ? stats?.data : null;
+  const unavailable = progress?.unavailable_lessons ?? [];
   if (!user) return null;
   return <main className="max-w-2xl mx-auto p-4 space-y-6">
     <nav className="flex flex-wrap gap-4"><Link to="/">{t('home')}</Link><button onClick={logout}>{t('logout')}</button></nav>
@@ -43,6 +44,13 @@ export default function Profile() {
       {progress && <><p>{t('progressCount', { completed: progress.completed_lessons, total: progress.total_lessons })}</p>
         <p>{t('progressPercent', { value: Math.round(progress.completed_percentage) })}</p>
         <ul>{progress.recent_lessons.map((lesson, index) => <li key={index}>{lesson}</li>)}</ul></>}
+      {unavailable.length > 0 && <div className="rounded-md bg-gray-50 p-3">
+        <h3 className="font-semibold">{t('unavailableLessons')}</h3>
+        <ul className="mt-2 space-y-2">{unavailable.map(lesson => <li key={lesson.lesson_id} className="[overflow-wrap:anywhere]">
+          <p className="font-medium">{lesson.word}</p>
+          <p className="text-sm text-gray-600">{t(lesson.completed ? 'unavailableCompleted' : 'unavailableInProgress', { count: lesson.attempts })}</p>
+        </li>)}</ul>
+      </div>}
     </section>
     <section className="p-4 border rounded-lg space-y-4">
       <h2 className="font-semibold">{t('profileTitle')}</h2>

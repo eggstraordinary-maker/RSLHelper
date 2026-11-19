@@ -103,6 +103,7 @@ test('empty and missing-metadata states remain readable on mobile in English', a
     const response = await route.fetch();
     const lessons = await response.json();
     // Only metadata is varied; the media still comes from the real isolated S3.
+    lessons[0].title = null;
     lessons[0].description = null;
     lessons[1].description = 'LongUnbrokenSignDescription'.repeat(12);
     await route.fulfill({ response, json: lessons });

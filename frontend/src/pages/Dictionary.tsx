@@ -1,11 +1,8 @@
 import React, { useId } from 'react';
 import { useTranslation } from 'react-i18next';
 import LeftTOC from '../components/LeftTOC';
-import { LessonMedia, useDictionaryCatalog } from '../features/catalog';
+import { LessonDetails, LessonMedia, lessonLabel, useDictionaryCatalog } from '../features/catalog';
 import { videosApi } from '../services/api';
-import type { VideoInfo } from '../types/api';
-
-const lessonLabel = (lesson: VideoInfo) => lesson.description?.trim().replace(/\s+/g, ' ') || lesson.filename;
 
 export default function Dictionary() {
   const { t } = useTranslation('dictionary');
@@ -34,7 +31,7 @@ export default function Dictionary() {
           <LeftTOC title={t('contents')} items={videos.map(video => ({ id: video.lesson_id, label: lessonLabel(video) }))}
             active={selected.lesson_id} onSelect={selectLesson} />
           <div className="space-y-4 min-w-0">
-            <LessonMedia key={`${selected.lesson_id}:${selected.media_url}`} src={videosApi.streamUrl(selected.media_url)} />
+            <LessonMedia key={`${selected.lesson_id}:${selected.version}:${selected.media_url}`} src={videosApi.streamUrl(selected.media_url)} />
             <div>
               <label htmlFor={selectedLabelId} className="block text-sm font-medium mb-1">{t('selectedSign')}</label>
               <input id={selectedLabelId} value={lessonLabel(selected)} readOnly
@@ -42,6 +39,7 @@ export default function Dictionary() {
             </div>
             <section aria-label={t('descriptionTitle')} className="bg-white border rounded-lg p-4">
               <h2 className="font-semibold mb-2">{t('descriptionTitle')}</h2>
+              <LessonDetails lesson={selected} />
               <p className="text-sm text-gray-600 whitespace-pre-line [overflow-wrap:anywhere]">
                 {selected.description?.trim() || t('noDescription')}
               </p>
