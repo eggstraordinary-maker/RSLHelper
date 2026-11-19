@@ -52,7 +52,7 @@ describe('application routes', () => {
     expect(second.router.state.location.pathname).toBe('/dictionary');
   });
 
-  it.each(['/learning', '/translator', '/profile', '/admin'])('requires login for direct guest access to %s', async path => {
+  it.each(['/learning', '/translator', '/profile', '/admin', '/admin/catalog'])('requires login for direct guest access to %s', async path => {
     localStorage.setItem('guest_mode', 'true');
     const { router } = await show(path);
     await screen.findByRole('button', { name: ru.login });
@@ -86,12 +86,12 @@ describe('application routes', () => {
     await screen.findByText('admin-content');
   });
 
-  it('denies ordinary users the admin route and does not mount its page', async () => {
+  it.each(['/admin', '/admin/catalog'])('denies ordinary users the admin route %s', async path => {
     setSessionTokens(tokens); api.onGet('/users/me').reply(200, testUser);
-    const { router } = await show('/admin');
+    const { router } = await show(path);
     expect((await screen.findByRole('alert')).textContent).toBe(ru.accessDenied);
     expect(screen.queryByText('admin-content')).toBeNull();
-    expect(router.state.location.pathname).toBe('/admin');
+    expect(router.state.location.pathname).toBe(path);
   });
 
   it('updates URL, active link and focus through navigation and Back/Forward', async () => {
@@ -151,5 +151,6 @@ describe('post-login destination', () => {
   it('keeps a local section query while dropping fragments', () => {
     expect(returnPath({ from: '/learning?mode=repeat#private-canary' })).toBe('/learning?mode=repeat');
     expect(returnPath({ from: '/Learning' })).toBe('/learning');
+    expect(returnPath({ from: '/admin/catalog?new=1' })).toBe('/admin/catalog?new=1');
   });
 });

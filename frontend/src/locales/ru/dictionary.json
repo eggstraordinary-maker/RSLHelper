@@ -13,5 +13,7 @@
   "videoLabel": "Эталонный жест",
   "selectedSign": "Выбранный жест",
   "descriptionTitle": "Описание жеста",
+  "lessonCategory": "Категория · {{category}}",
+  "learningMaterial": "Учебный материал",
   "noDescription": "Описание этого жеста пока не добавлено. Ориентируйтесь на видео."
 }

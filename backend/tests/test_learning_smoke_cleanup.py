@@ -3,8 +3,9 @@
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app import models
 from app.database import Base
@@ -25,6 +26,11 @@ class FakeStorage:
 @pytest.fixture
 def scoped_fixture(tmp_path, monkeypatch):
     engine = create_engine(f"sqlite:///{tmp_path / 'cleanup.sqlite'}")
+
+    @event.listens_for(engine, "connect")
+    def enable_foreign_keys(connection, _):
+        connection.execute("PRAGMA foreign_keys=ON")
+
     Base.metadata.create_all(engine)
     run_id = uuid4().hex
     key = f"{uuid4()}.mp4"
@@ -85,6 +91,44 @@ def test_cleanup_does_not_delete_s3_when_sql_commit_fails(scoped_fixture, monkey
         assert db.get(models.User, fixture["user_id"]) is not None
         assert db.scalar(select(models.VideoFile)) is not None
     assert storage.deleted == []
+
+
+@pytest.mark.parametrize("foreign_use", ["none", "editor", "lesson", "file"])
+def test_cleanup_browser_created_draft_is_scoped_to_test_owner_and_media(scoped_fixture, foreign_use):
+    fixture, engine, storage = scoped_fixture
+    run_id = fixture["run_id"]
+    owner_id = fixture["user_id"]
+    lesson_id, gesture_id, media_id = (str(uuid4()) for _ in range(3))
+    object_name = f"{media_id}.mp4"
+    with Session(engine) as db:
+        stranger = models.User(email="other@example.com", username="other", hashed_password="test")
+        db.add_all([stranger, models.VideoFile(lesson_id=lesson_id, filename="", is_published=False)])
+        db.flush()
+        db.add(models.CatalogGesture(id=gesture_id, lesson_id=lesson_id, version=2))
+        db.flush()
+        filename = "existing.mp4" if foreign_use == "file" else f"e2e-{run_id}-catalog.mp4"
+        db.add(models.CatalogMedia(id=media_id, gesture_id=gesture_id, object_name=object_name, filename=filename))
+        db.flush()
+        for version, action in ((1, "created"), (2, "video_replaced")):
+            db.add(models.CatalogRevision(
+                gesture_id=gesture_id, version=version, media_id=media_id if version == 2 else None,
+                author_id=stranger.id if foreign_use == "editor" and version == 2 else owner_id,
+                title=f"E2E catalog {run_id}", description="", category="", source="", consent_reference="",
+                review_status="draft", review_note="", action=action,
+            ))
+        if foreign_use == "lesson":
+            db.add(models.UserLearningProgress(user_id=stranger.id, lesson_id=lesson_id, word="Someone's practice"))
+        db.commit()
+    if foreign_use == "none":
+        learning_smoke.cleanup_fixture(fixture)
+    else:
+        expected = IntegrityError if foreign_use == "lesson" else ValueError
+        with pytest.raises(expected):
+            learning_smoke.cleanup_fixture(fixture)
+    with Session(engine) as db:
+        row = db.scalar(select(models.VideoFile).where(models.VideoFile.lesson_id == lesson_id))
+        assert (row is None) == (foreign_use == "none")
+    assert storage.deleted == ([object_name, *fixture["objects"]] if foreign_use == "none" else [])
 
 
 def test_public_manifest_has_no_credentials_and_still_cleans_only_owned_rows(scoped_fixture):

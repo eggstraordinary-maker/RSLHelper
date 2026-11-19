@@ -85,6 +85,7 @@ export default function App() {
       <Route path="/learning" element={<RequireSession><Learning /></RequireSession>} />
       <Route path="/translator" element={<RequireSession><Translator /></RequireSession>} />
       <Route path="/admin" element={<RequireSession adminOnly><AdminPage /></RequireSession>} />
+      <Route path="/admin/catalog" element={<RequireSession adminOnly><AdminPage catalog /></RequireSession>} />
     </Route>
     <Route path="/profile" element={<RequireSession><Profile /></RequireSession>} />
     <Route path="/register" element={<Register />} />
